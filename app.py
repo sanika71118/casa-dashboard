@@ -354,12 +354,14 @@ if page == "Page 1 — Inquiries":
         fig_map = px.scatter_mapbox(map_data, lat='Lat', lon='Lon', size='Count',
             color='Affiliate', hover_name='County',
             hover_data={'Count':True,'Affiliate':True,'Lat':False,'Lon':False},
-            size_max=45, zoom=6, center={"lat":32.5,"lon":-83.5},
+            size_max=42, zoom=6.4, center={"lat":32.65,"lon":-83.4},
             color_discrete_sequence=CHART_COLORS, mapbox_style="carto-positron")
         fig_map.update_layout(height=420, margin=dict(l=0,r=0,t=0,b=0),
             paper_bgcolor="rgba(0,0,0,0)",
-            legend=dict(orientation="v",x=0.01,y=0.99,bgcolor="rgba(255,255,255,.85)",
-                        bordercolor=MIDGRAY,borderwidth=1,font=dict(size=9)))
+            legend=dict(orientation="v",x=1.0,y=1.0,xanchor="left",
+                        bgcolor="rgba(255,255,255,.95)",bordercolor=MIDGRAY,
+                        borderwidth=1,font=dict(size=9),
+                        title=dict(text="Affiliate",font=dict(size=10))))
         st.plotly_chart(fig_map, use_container_width=True)
     with c3b:
         aff_counts = filtered['Affiliate'].value_counts().head(15).reset_index()
