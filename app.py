@@ -417,47 +417,69 @@ elif page == "Page 2 — Volunteer Map":
         v = VOLUNTEER_DATA.get(aff, [0,0,0])
         return sum(v) if qtr_idx is None else v[qtr_idx]
 
-    st.markdown("<div class='sec-head'>🗺️ Volunteers Sworn In — by Affiliate (Bubble Map)</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sec-head'>🗺️ Volunteers Sworn In — by County (Filled Map)</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
 
-    # Build affiliate bubble positions (use county centroids for affiliate HQ counties)
-    AFF_COORDS = {
-        'Atlanta':(33.749,-84.388),'Savannah':(32.028,-81.107),'Augusta':(33.374,-82.076),
-        'Cherokee':(34.239,-84.479),'Carroll':(33.581,-85.078),'Gwinnett':(33.962,-84.002),
-        'Athens':(33.961,-83.377),'Hall-Dawson':(34.311,-83.818),'Cobb':(33.938,-84.578),
-        'Paulding':(33.927,-84.864),'Forsyth':(34.226,-84.133),'Coweta':(33.357,-84.760),
-        'Glynn':(31.221,-81.517),'Rockdale':(33.657,-84.021),'Northwest':(34.503,-84.877),
-        'Lookout Mountain':(34.743,-85.300),'DeKalb':(33.775,-84.232),'Houston':(32.465,-83.652),
-        'CASA Kids':(32.169,-83.777),'SOWEGA':(31.462,-83.523),"Children's Voice":(34.138,-83.562),
-        'NE CASA':(34.115,-82.849),'Appalachian':(34.870,-84.321),'Piedmont':(33.268,-84.289),
-        'Dougherty':(31.535,-84.169),'Chattahoochee':(32.460,-84.988),'Towaliga':(33.073,-84.290),
-        'Lowndes & Echols':(30.832,-83.279),'Coastal Plain':(31.063,-82.415),'Atlantic Area':(31.837,-81.455),
-        'Henry':(33.448,-84.152),'Alcovy':(33.553,-83.847),'SE CASA':(31.550,-82.845),
-        'Advo-Kids':(32.461,-82.913),'TLC':(33.357,-84.760),'Ocmulgee':(32.838,-83.694),
-        'Alapaha':(31.295,-82.882),'Enotah':(34.629,-83.532),'Polk & Haralson':(34.002,-85.173),
-        'Ogeechee':(32.409,-81.775),'CASA SW':(30.855,-83.929),'Murray/Whitfield':(34.797,-84.977),
-        'NW GA':(34.262,-85.214),'Mountain':(34.629,-83.532),'Floyd':(34.262,-85.214),
-        'Central Ga':(33.073,-83.250),'Troup':(33.037,-85.030),'Clayton':(33.557,-84.359),
+    GA_COUNTY_FIPS = {
+        'Appling':'13001','Atkinson':'13003','Bacon':'13005','Baker':'13007','Baldwin':'13009',
+        'Banks':'13011','Barrow':'13013','Bartow':'13015','Ben Hill':'13017','Berrien':'13019',
+        'Bibb':'13021','Bleckley':'13023','Brantley':'13025','Brooks':'13027','Bryan':'13029',
+        'Bulloch':'13031','Burke':'13033','Butts':'13035','Calhoun':'13037','Camden':'13039',
+        'Candler':'13043','Carroll':'13045','Catoosa':'13047','Charlton':'13049','Chatham':'13051',
+        'Chattahoochee':'13053','Chattooga':'13055','Cherokee':'13057','Clarke':'13059','Clay':'13061',
+        'Clayton':'13063','Clinch':'13065','Cobb':'13067','Coffee':'13069','Colquitt':'13071',
+        'Columbia':'13073','Cook':'13075','Coweta':'13077','Crawford':'13079','Crisp':'13081',
+        'Dade':'13083','Dawson':'13085','Decatur':'13087','DeKalb':'13089','Dodge':'13091',
+        'Dooly':'13093','Dougherty':'13095','Douglas':'13097','Early':'13099','Echols':'13101',
+        'Effingham':'13103','Elbert':'13105','Emanuel':'13107','Evans':'13109','Fannin':'13111',
+        'Fayette':'13113','Floyd':'13115','Forsyth':'13117','Franklin':'13119','Fulton':'13121',
+        'Gilmer':'13123','Glascock':'13125','Glynn':'13127','Gordon':'13129','Grady':'13131',
+        'Greene':'13133','Gwinnett':'13135','Habersham':'13137','Hall':'13139','Hancock':'13141',
+        'Haralson':'13143','Harris':'13145','Hart':'13147','Heard':'13149','Henry':'13151',
+        'Houston':'13153','Irwin':'13155','Jackson':'13157','Jasper':'13159','Jeff Davis':'13161',
+        'Jefferson':'13163','Jenkins':'13165','Johnson':'13167','Jones':'13169','Lamar':'13171',
+        'Lanier':'13173','Laurens':'13175','Lee':'13177','Liberty':'13179','Lincoln':'13181',
+        'Long':'13183','Lowndes':'13185','Lumpkin':'13187','Macon':'13193','Madison':'13195',
+        'Marion':'13197','McDuffie':'13189','McIntosh':'13191','Meriwether':'13199','Miller':'13201',
+        'Mitchell':'13205','Monroe':'13207','Montgomery':'13209','Morgan':'13211','Murray':'13213',
+        'Muscogee':'13215','Newton':'13217','Oconee':'13219','Oglethorpe':'13221','Paulding':'13223',
+        'Peach':'13225','Pickens':'13227','Pierce':'13229','Pike':'13231','Polk':'13233',
+        'Pulaski':'13235','Putnam':'13237','Quitman':'13239','Rabun':'13241','Randolph':'13243',
+        'Richmond':'13245','Rockdale':'13247','Schley':'13249','Screven':'13251','Seminole':'13253',
+        'Spalding':'13255','Stephens':'13257','Stewart':'13259','Sumter':'13261','Talbot':'13263',
+        'Taliaferro':'13265','Tattnall':'13267','Taylor':'13269','Telfair':'13271','Terrell':'13273',
+        'Thomas':'13275','Tift':'13277','Toombs':'13279','Towns':'13281','Treutlen':'13283',
+        'Troup':'13285','Turner':'13287','Twiggs':'13289','Union':'13291','Upson':'13293',
+        'Walker':'13295','Walton':'13297','Ware':'13299','Warren':'13301','Washington':'13303',
+        'Wayne':'13305','Webster':'13307','Wheeler':'13309','White':'13311','Whitfield':'13313',
+        'Wilcox':'13315','Wilkes':'13317','Wilkinson':'13319','Worth':'13321',
     }
 
-    vol_map_data = []
-    for aff, coords in AFF_COORDS.items():
-        v = get_vol(aff)
-        if v > 0:
-            vol_map_data.append({'Affiliate':aff,'Count':v,'Lat':coords[0],'Lon':coords[1]})
-    vol_df = pd.DataFrame(vol_map_data)
+    county_rows = []
+    for county, fips in GA_COUNTY_FIPS.items():
+        aff = COUNTY_TO_AFF.get(county)
+        v = get_vol(aff) if aff else 0
+        county_rows.append({'County':county, 'FIPS':fips, 'Affiliate':aff or 'Unassigned', 'Count':v})
+    vol_county_df = pd.DataFrame(county_rows)
 
     c2a, c2b = st.columns([3,2])
     with c2a:
-        if not vol_df.empty:
-            fig_vmap = px.scatter_mapbox(vol_df, lat='Lat', lon='Lon', size='Count',
-                hover_name='Affiliate', hover_data={'Count':True,'Lat':False,'Lon':False},
-                size_max=50, zoom=6, center={"lat":32.5,"lon":-83.5},
-                color='Count', color_continuous_scale=[[0,LGRAY],[0.3,'#FF9090'],[0.6,RED],[1.0,'#7A0818']],
-                mapbox_style="carto-positron")
-            fig_vmap.update_layout(height=430, margin=dict(l=0,r=0,t=0,b=0),
-                paper_bgcolor="rgba(0,0,0,0)", coloraxis_showscale=False)
-            st.plotly_chart(fig_vmap, use_container_width=True)
+        max_v = max(vol_county_df['Count'].max(), 1)
+        fig_vmap = px.choropleth(
+            vol_county_df, geojson="https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json",
+            locations='FIPS', color='Count', scope="usa",
+            hover_name='County',
+            hover_data={'FIPS':False,'Affiliate':True,'Count':True},
+            color_continuous_scale=[[0,LGRAY],[0.15,'#FFD0D0'],[0.4,'#FF8888'],[0.7,RED],[1.0,'#7A0818']],
+            range_color=(0, max_v),
+        )
+        fig_vmap.update_geos(fitbounds="locations", visible=False)
+        fig_vmap.update_layout(height=430, margin=dict(l=0,r=0,t=0,b=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            coloraxis_colorbar=dict(title="Sworn In", thickness=12, len=0.6))
+        fig_vmap.update_traces(marker_line_color='white', marker_line_width=0.6,
+            hovertemplate="<b>%{hovertext}</b><br>Affiliate: %{customdata[0]}<br>Sworn In: %{customdata[1]}<extra></extra>")
+        st.plotly_chart(fig_vmap, use_container_width=True)
     with c2b:
         ranked = sorted([(aff, get_vol(aff)) for aff in VOLUNTEER_DATA], key=lambda x:-x[1])
         ranked = [(a,v) for a,v in ranked if v > 0]
@@ -519,7 +541,7 @@ elif page == "Page 3 — Quarterly Analysis":
     INQ_DATA  = [0, 77, 294, 0, 285, 255, 382]
     SWN_DATA  = [159,174,141,181,173,179,133]
     NO_DATA   = [True,False,False,True,False,False,False]
-    INQ_COLORS= [GOLD+"88" if nd else DKBLUE+"DD" for nd in NO_DATA]
+    INQ_COLORS = ["rgba(245,166,35,0.55)" if nd else "rgba(0,40,85,0.88)" for nd in NO_DATA]
 
     fig_q = go.Figure()
     fig_q.add_trace(go.Bar(name='Inquiries', x=QTR_LABELS, y=INQ_DATA,
@@ -527,7 +549,7 @@ elif page == "Page 3 — Quarterly Analysis":
         text=[str(v) if v>0 else 'No data' for v in INQ_DATA], textposition='outside',
         hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>"))
     fig_q.add_trace(go.Bar(name='Sworn In', x=QTR_LABELS, y=SWN_DATA,
-        marker_color=RED+"DD", marker_line_width=0,
+        marker_color="rgba(200,16,46,0.88)", marker_line_width=0,
         text=SWN_DATA, textposition='outside',
         hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>"))
     style_fig(fig_q, 350)
