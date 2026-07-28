@@ -671,21 +671,103 @@ elif page == "Page 3 — Quarterly Analysis":
 
     st.markdown(f"""<div class="casa-header">
         <h1>⚖️ CASA Georgia — Quarterly Analysis</h1>
-        <p>Inquiries vs. volunteers sworn in &nbsp;|&nbsp; FY2025 & FY2026 by fiscal quarter</p>
+        <p>Inquiries vs. volunteers sworn in &nbsp;|&nbsp; by fiscal quarter</p>
     </div>""", unsafe_allow_html=True)
 
-    st.markdown("<div class='note-box'>Fiscal year quarters: <strong>Q1 = Jul–Sep &nbsp;|&nbsp; Q2 = Oct–Dec &nbsp;|&nbsp; Q3 = Jan–Mar &nbsp;|&nbsp; Q4 = Apr–Jun</strong><br>FY2025 = 4 quarters complete &nbsp;·&nbsp; FY2026 = 3 quarters available &nbsp;·&nbsp; Amber bars = no matching inquiry data</div>", unsafe_allow_html=True)
+    st.markdown("<div class='note-box'>Fiscal year quarters: <strong>Q1 = Jul–Sep &nbsp;|&nbsp; Q2 = Oct–Dec &nbsp;|&nbsp; Q3 = Jan–Mar &nbsp;|&nbsp; Q4 = Apr–Jun</strong> &nbsp;·&nbsp; All numbers calculated automatically from your data files.</div>", unsafe_allow_html=True)
 
-    # KPIs
+    # ── Build quarterly data DYNAMICALLY from loaded files ───────────────────
+    # Define all quarters we want to show (add more as needed)
+    QTR_DEFS = [
+        ('FY25 Q1', 'FY2025 Q1', ['2024-07','2024-08','2024-09'], 'Jul–Sep 24'),
+        ('FY25 Q2', 'FY2025 Q2', ['2024-10','2024-11','2024-12'], 'Oct–Dec 24'),
+        ('FY25 Q3', 'FY2025 Q3', ['2025-01','2025-02','2025-03'], 'Jan–Mar 25'),
+        ('FY25 Q4', 'FY2025 Q4', ['2025-04','2025-05','2025-06'], 'Apr–Jun 25'),
+        ('FY26 Q1', 'FY2026 Q1', ['2025-07','2025-08','2025-09'], 'Jul–Sep 25'),
+        ('FY26 Q2', 'FY2026 Q2', ['2025-10','2025-11','2025-12'], 'Oct–Dec 25'),
+        ('FY26 Q3', 'FY2026 Q3', ['2026-01','2026-02','2026-03'], 'Jan–Mar 26'),
+        ('FY26 Q4', 'FY2026 Q4', ['2026-04','2026-05','2026-06'], 'Apr–Jun 26'),
+    ]
+
+    # Months we actually have inquiry data for
+    available_months = set(df['YearMonth'].unique())
+
+    # Get sworn-in total per quarter label from VOL_QTR_LABELS
+    def get_sworn_for_qtr(short_label):
+        # Match e.g. 'FY25 Q1' -> index in VOL_QTR_LABELS
+        for i, lbl in enumerate(VOL_QTR_LABELS):
+            if lbl == short_label:
+                return sum(
+                    (VOLUNTEER_DATA.get(aff, [])[i] if i < len(VOLUNTEER_DATA.get(aff, [])) else 0)
+                    for aff in VOLUNTEER_DATA
+                )
+        return None  # No sworn-in data for this quarter
+
+    QTR_LABELS, INQ_DATA, SWN_DATA, INQ_COLORS, HAS_INQ, TABLE_ROWS = [], [], [], [], [], []
+
+    for short_lbl, full_lbl, months, period in QTR_DEFS:
+        # Count inquiries from actual data
+        months_present = [m for m in months if m in available_months]
+        months_missing = [m for m in months if m not in available_months]
+        inq_count = len(df[df['YearMonth'].isin(months)])
+
+        # Sworn in
+        sworn = get_sworn_for_qtr(short_lbl)
+
+        # Only show quarter if we have either inquiries or sworn-in data
+        if inq_count == 0 and sworn is None:
+            continue
+
+        has_inq = inq_count > 0
+        HAS_INQ.append(has_inq)
+        QTR_LABELS.append(f"{short_lbl}<br>{period}")
+        INQ_DATA.append(inq_count)
+        SWN_DATA.append(sworn if sworn is not None else 0)
+
+        if not has_inq:
+            INQ_COLORS.append("rgba(245,166,35,0.55)")  # amber = no data
+        elif len(months_missing) > 0:
+            INQ_COLORS.append("rgba(0,40,85,0.55)")      # faded = partial
+        else:
+            INQ_COLORS.append("rgba(0,40,85,0.88)")      # full blue = complete
+
+        # Table row
+        if not has_inq:
+            inq_str = "No data"
+            conv_str = "—"
+        elif months_missing:
+            missing_labels = [pd.Period(m,'M').strftime('%b') for m in months_missing]
+            inq_str = f"{inq_count} ({', '.join(missing_labels)} missing)"
+            conv_str = "Partial"
+        else:
+            inq_str = str(inq_count)
+            conv_str = f"{round(sworn/inq_count*100)}%" if sworn and inq_count else "—"
+
+        TABLE_ROWS.append({
+            'Quarter': full_lbl,
+            'Period':  period.replace('–','–'),
+            'Inquiries': inq_str,
+            'Sworn In': str(sworn) if sworn is not None else "Not yet available",
+            'Conversion': conv_str,
+        })
+
+    # KPIs — now calculated from real data
+    total_sworn_all = sum(sum(v) for v in VOLUNTEER_DATA.values())
+    total_inq_matched = sum(c for c,h in zip(INQ_DATA,HAS_INQ) if h)
+    best_sworn_val = max((s for s in SWN_DATA if s > 0), default=0)
+    best_sworn_lbl = QTR_LABELS[SWN_DATA.index(best_sworn_val)].replace('<br>',' ') if best_sworn_val else "—"
+    most_inq_val = max(INQ_DATA) if INQ_DATA else 0
+    most_inq_lbl = QTR_LABELS[INQ_DATA.index(most_inq_val)].replace('<br>',' ') if most_inq_val else "—"
+
     k1,k2,k3,k4 = st.columns(4)
     with k1:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Sworn In (7 qtrs)</div><div class="kpi-value">1,140</div><div class="kpi-sub">FY2025 Q1 through FY2026 Q3</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Sworn In</div><div class="kpi-value">{total_sworn_all:,}</div><div class="kpi-sub">All quarters in file</div></div>', unsafe_allow_html=True)
     with k2:
-        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Matched Inquiries</div><div class="kpi-value">1,313</div><div class="kpi-sub">5 fully-matched quarters</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Total Inquiries</div><div class="kpi-value">{total_inq_matched:,}</div><div class="kpi-sub">Quarters with full data</div></div>', unsafe_allow_html=True)
     with k3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Best Sworn-in Qtr</div><div class="kpi-value">181</div><div class="kpi-sub">FY2025 Q4 (Apr–Jun 2025)</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Best Sworn-in Qtr</div><div class="kpi-value">{best_sworn_val}</div><div class="kpi-sub">{best_sworn_lbl}</div></div>', unsafe_allow_html=True)
     with k4:
-        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Most Inquiries</div><div class="kpi-value">382</div><div class="kpi-sub">FY2026 Q3 (Jan–Mar 2026)</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Most Inquiries</div><div class="kpi-value">{most_inq_val:,}</div><div class="kpi-sub">{most_inq_lbl}</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -699,58 +781,64 @@ elif page == "Page 3 — Quarterly Analysis":
         The <strong style="color:#C8102E">red bars</strong> show how many actually completed training and were sworn in.
         The gap between the two bars is your <strong>pipeline</strong> — people who inquired but haven't been sworn in yet.
         A smaller gap means your affiliate is doing a great job converting interest into active volunteers.
-        <strong>Amber/gold bars mean we don't have inquiry data for that quarter yet.</strong>
+        <strong>Amber bars = no inquiry file available for that quarter. Faded blue = partial data.</strong>
     </div>""", unsafe_allow_html=True)
 
-    QTR_LABELS = ['FY25 Q1<br>Jul–Sep 24','FY25 Q2<br>Oct–Dec 24','FY25 Q3<br>Jan–Mar 25',
-                  'FY25 Q4<br>Apr–Jun 25','FY26 Q1<br>Jul–Sep 25','FY26 Q2<br>Oct–Dec 25','FY26 Q3<br>Jan–Mar 26']
-    INQ_DATA  = [0, 77, 294, 0, 285, 255, 382]
-    SWN_DATA  = [159,174,141,181,173,179,133]
-    NO_DATA   = [True,False,False,True,False,False,False]
-    # Fix: use same dark blue for inquiries (not amber which was confusing the legend)
-    INQ_COLORS = ["rgba(245,166,35,0.6)" if nd else "rgba(0,40,85,0.88)" for nd in NO_DATA]
-
+    # Two separate traces: one for "has data" bars and one for "no data" bars
+    # This ensures the legend shows the right color
     fig_q = go.Figure()
+
+    # Invisible trace just to set legend color for Inquiries
     fig_q.add_trace(go.Bar(
-        name='Inquiries (dark blue)',
+        name='Inquiries',
+        x=[None], y=[None],
+        marker_color="rgba(0,40,85,0.88)",
+        showlegend=True
+    ))
+    fig_q.add_trace(go.Bar(
+        name='Sworn In',
+        x=[None], y=[None],
+        marker_color="rgba(200,16,46,0.88)",
+        showlegend=True
+    ))
+
+    # Actual inquiry bars
+    fig_q.add_trace(go.Bar(
+        name='Inquiries',
         x=QTR_LABELS, y=INQ_DATA,
         marker_color=INQ_COLORS, marker_line_width=0,
-        text=[str(v) if v>0 else 'No data' for v in INQ_DATA], textposition='outside',
+        text=[str(v) if v > 0 else 'No data' for v in INQ_DATA],
+        textposition='outside',
+        showlegend=False,
         hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>"))
+
+    # Actual sworn-in bars
     fig_q.add_trace(go.Bar(
-        name='Sworn In (red)',
+        name='Sworn In',
         x=QTR_LABELS, y=SWN_DATA,
         marker_color="rgba(200,16,46,0.88)", marker_line_width=0,
-        text=SWN_DATA, textposition='outside',
+        text=[str(v) if v > 0 else '—' for v in SWN_DATA],
+        textposition='outside',
+        showlegend=False,
         hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>"))
-    style_fig(fig_q, 370)
+
+    style_fig(fig_q, 400)
     fig_q.update_layout(
-        barmode='group', bargap=0.25, bargroupgap=0.05,
+        barmode='group', bargap=0.2, bargroupgap=0.05,
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.04, xanchor="left", x=0,
-            font=dict(size=11),
-            itemsizing='constant',
-            traceorder='normal'
+            orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+            font=dict(size=12), itemsizing='constant'
         )
     )
-    # Add a small annotation explaining amber bars
     fig_q.add_annotation(
         text="⚠️ Amber = no inquiry data available for that quarter",
         xref="paper", yref="paper", x=0, y=-0.18,
-        showarrow=False, font=dict(size=10, color="#B8860B"),
-        align="left"
+        showarrow=False, font=dict(size=10, color="#B8860B"), align="left"
     )
     st.plotly_chart(fig_q, use_container_width=True)
 
-    # Conversion table
-    conv_data = {
-        'Quarter':    ['FY2025 Q1','FY2025 Q2','FY2025 Q3','FY2025 Q4','FY2026 Q1','FY2026 Q2','FY2026 Q3','FY2026 Q4'],
-        'Period':     ['Jul–Sep 2024','Oct–Dec 2024','Jan–Mar 2025','Apr–Jun 2025','Jul–Sep 2025','Oct–Dec 2025','Jan–Mar 2026','Apr–Jun 2026'],
-        'Inquiries':  ['No data','77 (Dec only)','294','No data','285','255','382','175 (Apr+May only)'],
-        'Sworn In':   ['159','174','141','181','173','179','133','Not yet available'],
-        'Conversion': ['—','Partial','48%','—','61%','70%','35%','—'],
-    }
-    conv_df = pd.DataFrame(conv_data)
+    # Conversion table — built dynamically
+    conv_df = pd.DataFrame(TABLE_ROWS)
     st.dataframe(conv_df, use_container_width=True, hide_index=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
