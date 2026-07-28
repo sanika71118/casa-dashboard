@@ -154,26 +154,94 @@ COUNTY_COORDS = {
     'Seminole':(30.941,-84.874),'Worth':(31.566,-83.853),
 }
 
-VOLUNTEER_DATA = {
-    'Advo-Kids':[0,4,0],'Ocmulgee':[0,3,2],'Central Ga':[0,0,0],
-    'Towaliga':[3,6,7],'Houston':[2,4,0],'TLC':[2,3,1],
-    'Troup':[0,1,0],'Coweta':[0,2,1],
-    'Atlanta':[16,2,19],'Henry':[0,3,0],"Children's Voice":[0,5,6],
-    'Clayton':[5,1,0],'DeKalb':[3,5,4],'Gwinnett':[9,7,0],
-    'Cobb':[5,8,0],'Rockdale':[5,4,0],'Forsyth':[6,6,0],'Alcovy':[5,1,0],
-    'Piedmont':[0,2,7],'Athens':[0,10,18],'Enotah':[0,5,1],
-    'Hall-Dawson':[10,4,0],'NE CASA':[3,2,6],'Mountain':[0,0,1],
-    'NW GA':[0,7,0],'Cherokee':[9,1,14],'Paulding':[4,5,6],
-    'Appalachian':[2,7,2],'Floyd':[0,4,0],'Polk & Haralson':[1,2,3],
-    'Murray/Whitfield':[0,0,1],'Lookout Mountain':[7,0,0],
-    'Atlantic Area':[3,1,1],'Glynn':[10,0,4],'Augusta':[11,9,4],
-    'Ogeechee':[3,0,1],'Savannah':[7,14,11],'SE CASA':[4,0,0],
-    'Lowndes & Echols':[1,5,0],'CASA SW':[2,0,1],'SOWEGA':[5,6,0],
-    'Chattahoochee':[0,0,8],'CASA Kids':[4,0,4],'Alapaha':[4,2,0],
-    'Coastal Plain':[0,9,0],'Dougherty':[4,3,3],
-}
+# ── VOLUNTEER DATA — loaded from Excel file in /data ─────────────────────────
+# Name your sworn-in file: volunteers_sworn_in.xlsx and drop it in /data
+# Expected columns: Counties | FY XXXX - Nth Qtr | ...
+# Add new FY columns to the Excel and the dashboard picks them up automatically
 
-# ── DATA LOADING ──────────────────────────────────────────────────────────────
+@st.cache_data
+def load_volunteer_data():
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    # Look for a file with "volunteer" or "sworn" in the name
+    candidates = glob.glob(os.path.join(data_dir, "*volunteer*sworn*.xlsx")) + \
+                 glob.glob(os.path.join(data_dir, "*sworn*.xlsx")) + \
+                 glob.glob(os.path.join(data_dir, "*volunteer*in*.xlsx"))
+    if not candidates:
+        return {}, []
+    path = candidates[0]
+    df = pd.read_excel(path, sheet_name=0)
+    # Drop TOTALS row
+    df = df[df.iloc[:,0].astype(str).str.upper() != 'TOTALS'].copy()
+    df = df.dropna(subset=[df.columns[0]])
+    affiliate_col = df.columns[0]
+    qtr_cols = [c for c in df.columns if c != affiliate_col]
+    # Build {affiliate: [q1, q2, q3, ...]} dict
+    vol = {}
+    for _, row in df.iterrows():
+        aff = str(row[affiliate_col]).strip()
+        vals = [int(row[c]) if pd.notna(row[c]) else 0 for c in qtr_cols]
+        vol[aff] = vals
+    return vol, qtr_cols
+
+VOLUNTEER_DATA, VOL_QTR_COLS = load_volunteer_data()
+
+# Quarter label builder — maps column names to readable labels
+def col_to_label(col):
+    # e.g. "FY 2026 - 1st Qtr" → "FY26 Q1"
+    import re
+    m = re.search(r'(\d{4}).*?(\d)[snrt][tdh]', col)
+    if m:
+        fy = m.group(1)[2:]
+        q  = m.group(2)
+        return f"FY{fy} Q{q}"
+    return col
+
+VOL_QTR_LABELS = [col_to_label(c) for c in VOL_QTR_COLS]
+
+# Fallback if no file found — use last known data
+if not VOLUNTEER_DATA:
+    VOLUNTEER_DATA = {
+        'Advo-Kids':[0,4,0,3,0,1,4],'Alapaha':[4,2,0,2,0,2,0],
+        'Alcovy':[5,1,0,3,3,3,0],'Appalachian':[2,7,2,3,4,1,1],
+        'Athens-Oconee':[0,10,18,1,5,8,1],'Atlanta':[16,2,19,23,26,18,11],
+        'Atlantic':[3,1,1,1,3,0,5],'Augusta':[11,9,4,15,6,15,14],
+        'Carroll':[4,11,5,3,10,9,4],'CASA Kids':[4,0,4,0,5,9,0],
+        'Central Ga':[0,0,0,0,0,0,7],'Chattahoochee':[0,0,8,0,1,9,1],
+        'Cherokee':[9,1,14,9,2,11,3],"Children's Voice":[0,5,6,5,0,5,0],
+        'Clayton':[5,1,0,0,1,0,0],'Coastal Plain':[0,9,0,1,0,5,3],
+        'Cobb':[5,8,0,14,6,4,0],'Coweta':[0,2,1,8,12,3,0],
+        'Dekalb':[3,5,4,5,6,0,0],'Dougherty':[4,3,3,0,1,0,8],
+        'Enotah':[0,5,1,0,2,0,2],'Floyd':[0,4,0,2,4,1,1],
+        'Forsyth':[6,6,0,4,2,0,11],'Glynn':[10,0,4,3,5,2,0],
+        'Gwinnett':[9,7,0,4,15,5,4],'Hall-Dawson':[10,4,0,11,1,6,8],
+        'Henry':[0,3,0,3,2,3,7],'Houston':[2,4,0,7,8,1,0],
+        'Lookout':[7,0,0,4,5,1,6],'Lowndes':[1,5,0,4,0,8,0],
+        'Murray/Whit':[0,0,1,1,0,2,2],'Northeast':[3,2,6,1,3,4,2],
+        'Northern':[0,0,1,0,0,1,6],'Northwest':[0,7,0,9,0,7,0],
+        'Ocmulgee':[0,3,2,0,0,5,0],'Ogeechee':[3,0,1,3,0,2,0],
+        'Paulding':[4,5,6,0,5,3,7],'Piedmont':[0,2,7,0,0,4,7],
+        'Polk /Haralson':[1,2,3,0,0,3,0],'Rockdale':[5,4,0,5,5,4,0],
+        'Savannah':[7,14,11,12,8,9,7],'Southeast Georgia':[4,0,0,2,3,3,0],
+        'SOWEGA':[5,6,0,6,3,1,1],'SW Georgia':[2,0,1,2,3,1,0],
+        'TLC':[2,3,1,1,4,0,0],'Towaliga':[3,6,7,0,3,0,0],'Troup':[0,1,0,1,1,0,0],
+    }
+    VOL_QTR_COLS  = ['FY 2025 - 1st Qtr','FY 2025 - 2nd Qtr','FY 2025 - 3rd Qtr',
+                     'FY 2025 - 4th Qtr','FY 2026 - 1st Qtr','FY 2026 - 2nd Qtr','FY 2026 - 3rd Qtr']
+    VOL_QTR_LABELS = ['FY25 Q1','FY25 Q2','FY25 Q3','FY25 Q4','FY26 Q1','FY26 Q2','FY26 Q3']
+
+@st.cache_data
+def load_ga_geojson():
+    import urllib.request, json
+    url = "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json"
+    try:
+        with urllib.request.urlopen(url, timeout=15) as r:
+            all_geo = json.loads(r.read())
+        ga_features = [f for f in all_geo['features'] if f['id'].startswith('13')]
+        return {'type':'FeatureCollection','features':ga_features}
+    except Exception:
+        return None
+
+
 @st.cache_data
 def load_data():
     data_dir = os.path.join(os.path.dirname(__file__), "data")
@@ -409,11 +477,11 @@ if page == "Page 1 — Inquiries":
 
     c3a,c3b = st.columns([3,2])
     with c3a:
-        fig_map = px.scatter_mapbox(map_data, lat='Lat', lon='Lon', size='Count',
+        fig_map = px.scatter_map(map_data, lat='Lat', lon='Lon', size='Count',
             color='Affiliate', hover_name='County',
             hover_data={'Count':True,'Affiliate':True,'Lat':False,'Lon':False},
             size_max=42, zoom=6.4, center={"lat":32.65,"lon":-83.4},
-            color_discrete_sequence=CHART_COLORS, mapbox_style="carto-positron")
+            color_discrete_sequence=CHART_COLORS, map_style="carto-positron")
         fig_map.update_layout(height=420, margin=dict(l=0,r=0,t=0,b=0),
             paper_bgcolor="rgba(0,0,0,0)",
             legend=dict(orientation="v",x=1.0,y=1.0,xanchor="left",
@@ -470,8 +538,9 @@ elif page == "Page 2 — Volunteer Map":
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    qtr_sel = st.selectbox("Filter by Quarter:", ["All Quarters", "Q1 — Jul–Sep 2025", "Q2 — Oct–Dec 2025", "Q3 — Jan–Mar 2026"])
-    qtr_idx = {"All Quarters":None,"Q1 — Jul–Sep 2025":0,"Q2 — Oct–Dec 2025":1,"Q3 — Jan–Mar 2026":2}[qtr_sel]
+    qtr_options = ["All Quarters"] + VOL_QTR_LABELS
+    qtr_sel = st.selectbox("Filter by Quarter:", qtr_options)
+    qtr_idx = None if qtr_sel == "All Quarters" else VOL_QTR_LABELS.index(qtr_sel)
 
     def get_vol(aff):
         v = VOLUNTEER_DATA.get(aff, [0,0,0])
@@ -532,21 +601,25 @@ elif page == "Page 2 — Volunteer Map":
     c2a, c2b = st.columns([3,2])
     with c2a:
         max_v = max(vol_county_df['Count'].max(), 1)
-        fig_vmap = px.choropleth(
-            vol_county_df, geojson="https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json",
-            locations='FIPS', color='Count', scope="usa",
-            hover_name='County',
-            hover_data={'FIPS':False,'Affiliate':True,'Count':True},
-            color_continuous_scale=[[0,LGRAY],[0.15,'#FFD0D0'],[0.4,'#FF8888'],[0.7,RED],[1.0,'#7A0818']],
-            range_color=(0, max_v),
-        )
-        fig_vmap.update_geos(fitbounds="locations", visible=False)
-        fig_vmap.update_layout(height=430, margin=dict(l=0,r=0,t=0,b=0),
-            paper_bgcolor="rgba(0,0,0,0)",
-            coloraxis_colorbar=dict(title="Sworn In", thickness=12, len=0.6))
-        fig_vmap.update_traces(marker_line_color='white', marker_line_width=0.6,
-            hovertemplate="<b>%{hovertext}</b><br>Affiliate: %{customdata[0]}<br>Sworn In: %{customdata[1]}<extra></extra>")
-        st.plotly_chart(fig_vmap, use_container_width=True)
+        ga_geojson = load_ga_geojson()
+        if ga_geojson:
+            fig_vmap = px.choropleth(
+                vol_county_df, geojson=ga_geojson,
+                locations='FIPS', color='Count',
+                hover_name='County',
+                hover_data={'FIPS':False,'Affiliate':True,'Count':True},
+                color_continuous_scale=[[0,LGRAY],[0.15,'#FFD0D0'],[0.4,'#FF8888'],[0.7,RED],[1.0,'#7A0818']],
+                range_color=(0, max_v),
+            )
+            fig_vmap.update_geos(fitbounds="locations", visible=False, scope="usa")
+            fig_vmap.update_layout(height=430, margin=dict(l=0,r=0,t=0,b=0),
+                paper_bgcolor="rgba(0,0,0,0)",
+                coloraxis_colorbar=dict(title="Sworn In", thickness=12, len=0.6))
+            fig_vmap.update_traces(marker_line_color='white', marker_line_width=0.6,
+                hovertemplate="<b>%{hovertext}</b><br>Affiliate: %{customdata[0]}<br>Sworn In: %{customdata[1]}<extra></extra>")
+            st.plotly_chart(fig_vmap, use_container_width=True)
+        else:
+            st.info("Map unavailable — could not load county boundaries. The ranked list on the right still shows all data.")
     with c2b:
         ranked = sorted([(aff, get_vol(aff)) for aff in VOLUNTEER_DATA], key=lambda x:-x[1])
         ranked = [(a,v) for a,v in ranked if v > 0]
@@ -668,8 +741,9 @@ elif page == "Page 3 — Quarterly Analysis":
     st.markdown("<div class='sec-head'>🏢 New Volunteers Sworn In by Affiliate — by Quarter</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
 
-    qtr_filter = st.selectbox("Select quarter:", ["All FY2026 Quarters","Q1 — Jul–Sep 2025","Q2 — Oct–Dec 2025","Q3 — Jan–Mar 2026"])
-    qi = {"All FY2026 Quarters":None,"Q1 — Jul–Sep 2025":0,"Q2 — Oct–Dec 2025":1,"Q3 — Jan–Mar 2026":2}[qtr_filter]
+    qtr_options3 = ["All Quarters"] + VOL_QTR_LABELS
+    qtr_filter = st.selectbox("Select quarter:", qtr_options3)
+    qi = None if qtr_filter == "All Quarters" else VOL_QTR_LABELS.index(qtr_filter)
 
     vol_rows = []
     for region, affs in REGIONS:
