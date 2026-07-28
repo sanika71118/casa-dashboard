@@ -538,13 +538,26 @@ elif page == "Page 2 — Volunteer Map":
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    qtr_options = ["All Quarters"] + VOL_QTR_LABELS
-    qtr_sel = st.selectbox("Filter by Quarter:", qtr_options)
-    qtr_idx = None if qtr_sel == "All Quarters" else VOL_QTR_LABELS.index(qtr_sel)
+    st.markdown("<div style='font-size:12px;font-weight:700;color:#002855;margin-bottom:4px'>Filter by Quarter (select one or more):</div>", unsafe_allow_html=True)
+    col_all, col_qtrs = st.columns([1,4])
+    with col_all:
+        select_all_qtrs = st.checkbox("All", value=True, key="p2_all")
+    with col_qtrs:
+        if select_all_qtrs:
+            selected_qtrs = VOL_QTR_LABELS
+            st.multiselect("", VOL_QTR_LABELS, default=VOL_QTR_LABELS, key="p2_multi", disabled=True, label_visibility="collapsed")
+        else:
+            selected_qtrs = st.multiselect("", VOL_QTR_LABELS, default=[VOL_QTR_LABELS[-1]] if VOL_QTR_LABELS else [], key="p2_multi2", label_visibility="collapsed")
+            if not selected_qtrs:
+                selected_qtrs = VOL_QTR_LABELS
+
+    selected_idxs = [VOL_QTR_LABELS.index(q) for q in selected_qtrs if q in VOL_QTR_LABELS]
 
     def get_vol(aff):
-        v = VOLUNTEER_DATA.get(aff, [0,0,0])
-        return sum(v) if qtr_idx is None else v[qtr_idx]
+        v = VOLUNTEER_DATA.get(aff, [])
+        if not v:
+            return 0
+        return sum(v[i] for i in selected_idxs if i < len(v))
 
     st.markdown("<div class='sec-head'>🗺️ Volunteers Sworn In — by County (Filled Map)</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
@@ -640,8 +653,12 @@ elif page == "Page 2 — Volunteer Map":
     rows = []
     for region, affs in REGIONS:
         for aff in affs:
-            v = VOLUNTEER_DATA.get(aff,[0,0,0])
-            rows.append({'Region':region,'Affiliate':aff,'Q1':v[0],'Q2':v[1],'Q3':v[2],'Total':sum(v)})
+            v = VOLUNTEER_DATA.get(aff, [0]*len(VOL_QTR_LABELS))
+            row = {'Region':region,'Affiliate':aff}
+            for i, lbl in enumerate(VOL_QTR_LABELS):
+                row[lbl] = v[i] if i < len(v) else 0
+            row['Total'] = sum(v)
+            rows.append(row)
     reg_df = pd.DataFrame(rows)
     st.dataframe(reg_df.style.bar(subset=['Total'],color=RED+"88"), use_container_width=True, height=500)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -741,15 +758,26 @@ elif page == "Page 3 — Quarterly Analysis":
     st.markdown("<div class='sec-head'>🏢 New Volunteers Sworn In by Affiliate — by Quarter</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
 
-    qtr_options3 = ["All Quarters"] + VOL_QTR_LABELS
-    qtr_filter = st.selectbox("Select quarter:", qtr_options3)
-    qi = None if qtr_filter == "All Quarters" else VOL_QTR_LABELS.index(qtr_filter)
+    st.markdown("<div style='font-size:12px;font-weight:700;color:#002855;margin-bottom:4px'>Filter by Quarter (select one or more):</div>", unsafe_allow_html=True)
+    col_all3, col_qtrs3 = st.columns([1,4])
+    with col_all3:
+        select_all_qtrs3 = st.checkbox("All", value=True, key="p3_all")
+    with col_qtrs3:
+        if select_all_qtrs3:
+            selected_qtrs3 = VOL_QTR_LABELS
+            st.multiselect("", VOL_QTR_LABELS, default=VOL_QTR_LABELS, key="p3_multi", disabled=True, label_visibility="collapsed")
+        else:
+            selected_qtrs3 = st.multiselect("", VOL_QTR_LABELS, default=[VOL_QTR_LABELS[-1]] if VOL_QTR_LABELS else [], key="p3_multi2", label_visibility="collapsed")
+            if not selected_qtrs3:
+                selected_qtrs3 = VOL_QTR_LABELS
+
+    selected_idxs3 = [VOL_QTR_LABELS.index(q) for q in selected_qtrs3 if q in VOL_QTR_LABELS]
 
     vol_rows = []
     for region, affs in REGIONS:
         for aff in affs:
-            v = VOLUNTEER_DATA.get(aff,[0,0,0])
-            count = sum(v) if qi is None else v[qi]
+            v = VOLUNTEER_DATA.get(aff, [])
+            count = sum(v[i] for i in selected_idxs3 if i < len(v))
             vol_rows.append({'Region':region,'Affiliate':aff,'Count':count})
     vol_sorted = pd.DataFrame(vol_rows).sort_values('Count',ascending=False)
     vol_sorted = vol_sorted[vol_sorted['Count']>0]
