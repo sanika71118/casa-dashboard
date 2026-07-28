@@ -12,6 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # ── THEME ─────────────────────────────────────────────────────────────────────
 RED       = "#C8102E"
 DKBLUE    = "#002855"
@@ -207,7 +208,17 @@ def load_data():
     def get_fy_quarter(ym):
         m = int(ym.split('-')[1])
         return 'Q1' if m in [7,8,9] else 'Q2' if m in [10,11,12] else 'Q3' if m in [1,2,3] else 'Q4'
+
+    def get_fy_year(ym):
+        # FY runs Jul→Jun. Jul-Dec belong to the NEXT calendar year's FY.
+        # e.g. Jul 2023 → FY2024, Jan 2024 → FY2024, Jul 2024 → FY2025
+        y = int(ym.split('-')[0])
+        m = int(ym.split('-')[1])
+        return y + 1 if m >= 7 else y
+
     combined['FYQuarter'] = combined['YearMonth'].apply(get_fy_quarter)
+    combined['FYYear']    = combined['YearMonth'].apply(get_fy_year)
+    combined['FYLabel']   = combined.apply(lambda r: f"FY{str(r['FYYear'])[2:]} {r['FYQuarter']}", axis=1)
     return combined
 
 df = load_data()
@@ -301,6 +312,19 @@ if page == "Page 1 — Inquiries":
     st.markdown("<div class='sec-head'>📅 1. Total Inquiries by Month</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
     monthly = filtered.groupby(['YearMonth','MonthLabel']).size().reset_index(name='Count').sort_values('YearMonth')
+    if not monthly.empty:
+        peak_month = monthly.loc[monthly['Count'].idxmax(), 'MonthLabel']
+        peak_val   = monthly['Count'].max()
+        low_month  = monthly.loc[monthly['Count'].idxmin(), 'MonthLabel']
+        low_val    = monthly['Count'].min()
+        avg_val    = round(monthly['Count'].mean())
+        trend_dir  = "increasing" if monthly['Count'].iloc[-1] > monthly['Count'].iloc[0] else "decreasing"
+        st.markdown(f"""<div class='note-box'>
+            💡 <strong>What this tells you:</strong> Each bar shows how many people reached out about volunteering that month.
+            The dotted line shows the trend. <strong>{peak_month}</strong> had the highest interest with <strong>{peak_val}</strong> inquiries,
+            while <strong>{low_month}</strong> was the lowest with <strong>{low_val}</strong>.
+            The average is <strong>{avg_val} inquiries/month</strong> and the overall trend is <strong>{trend_dir}</strong>.
+        </div>""", unsafe_allow_html=True)
     fig1 = go.Figure()
     fig1.add_trace(go.Bar(x=monthly['MonthLabel'], y=monthly['Count'],
         marker_color=RED, marker_line_color=DKBLUE, marker_line_width=1,
@@ -320,22 +344,44 @@ if page == "Page 1 — Inquiries":
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
     src_counts = filtered['Source'].value_counts().reset_index()
     src_counts.columns = ['Source','Count']
+    top_src_name = src_counts.iloc[0]['Source'] if not src_counts.empty else "—"
+    top_src_pct  = round(src_counts.iloc[0]['Count'] / src_counts['Count'].sum() * 100) if not src_counts.empty else 0
+    second_src   = src_counts.iloc[1]['Source'] if len(src_counts) > 1 else "—"
+    st.markdown(f"""<div class='note-box'>
+        💡 <strong>What this tells you:</strong> Most people who inquire about volunteering hear about CASA through
+        <strong>{top_src_name}</strong> ({top_src_pct}% of all inquiries). <strong>{second_src}</strong> is the second
+        biggest channel. This helps CASA focus marketing — invest more in what is already driving the most interest.
+    </div>""", unsafe_allow_html=True)
     c2a,c2b = st.columns(2)
     with c2a:
-        fig2a = px.pie(src_counts, values='Count', names='Source',
+        top8 = src_counts.head(8).copy()
+        other_count = src_counts.iloc[8:]['Count'].sum()
+        if other_count > 0:
+            top8 = pd.concat([top8, pd.DataFrame([{'Source':'Other sources','Count':other_count}])], ignore_index=True)
+        fig2a = px.pie(top8, values='Count', names='Source',
                        color_discrete_sequence=CHART_COLORS, hole=0.45)
-        fig2a.update_traces(textposition='outside', textinfo='label+percent',
-                            hovertemplate="<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>")
-        style_fig(fig2a, 360)
-        fig2a.update_layout(showlegend=False)
+        fig2a.update_traces(
+            textposition='inside', textinfo='percent',
+            hovertemplate="<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>",
+            insidetextorientation='radial')
+        fig2a.update_layout(
+            height=380, paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=10,r=10,t=30,b=10),
+            legend=dict(orientation="v",x=1.01,y=0.5,xanchor="left",
+                        font=dict(size=10),bgcolor="rgba(0,0,0,0)"),
+            showlegend=True,
+            font=dict(family="Arial,sans-serif",color=DKBLUE))
         st.plotly_chart(fig2a, use_container_width=True)
     with c2b:
         fig2b = go.Figure(go.Bar(x=src_counts['Count'], y=src_counts['Source'], orientation='h',
             marker_color=[RED if i==0 else DKBLUE if i==1 else LTBLUE for i in range(len(src_counts))],
             text=src_counts['Count'], textposition='outside',
             hovertemplate="<b>%{y}</b><br>Count: %{x}<extra></extra>"))
-        style_fig(fig2b, 360)
-        fig2b.update_layout(yaxis=dict(autorange='reversed', gridcolor="rgba(0,0,0,0)"), showlegend=False)
+        style_fig(fig2b, 420)
+        fig2b.update_layout(
+            yaxis=dict(autorange='reversed',gridcolor="rgba(0,0,0,0)",tickfont=dict(size=10)),
+            xaxis=dict(gridcolor="#E8ECF0"),
+            showlegend=False, margin=dict(l=20,r=60,t=20,b=20))
         st.plotly_chart(fig2b, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -345,9 +391,21 @@ if page == "Page 1 — Inquiries":
     county_counts = filtered['County'].value_counts().reset_index()
     county_counts.columns = ['County','Count']
     county_counts['Affiliate'] = county_counts['County'].map(COUNTY_TO_AFF).fillna('Other')
+    # Remove unassigned/unknown entries from map display
+    county_counts = county_counts[~county_counts['Affiliate'].isin(['Other','Unassigned'])]
     county_counts['Lat'] = county_counts['County'].map(lambda c: COUNTY_COORDS.get(c,(None,None))[0])
     county_counts['Lon'] = county_counts['County'].map(lambda c: COUNTY_COORDS.get(c,(None,None))[1])
     map_data = county_counts.dropna(subset=['Lat','Lon'])
+    top_aff_map = map_data.groupby('Affiliate')['Count'].sum().idxmax() if not map_data.empty else "—"
+    top_aff_map_n = map_data.groupby('Affiliate')['Count'].sum().max() if not map_data.empty else 0
+    active_counties = len(map_data)
+    st.markdown(f"""<div class='note-box'>
+        💡 <strong>What this tells you:</strong> Each bubble on the map represents a Georgia county — bigger bubble means more inquiries from that area.
+        Bubbles are color-coded by affiliate so you can instantly see which affiliate regions are most active.
+        <strong>{top_aff_map}</strong> is currently the most active affiliate with <strong>{top_aff_map_n}</strong> inquiries
+        across <strong>{active_counties}</strong> counties with activity. Use this to identify where CASA has strong interest
+        and where outreach could be strengthened.
+    </div>""", unsafe_allow_html=True)
 
     c3a,c3b = st.columns([3,2])
     with c3a:
@@ -421,6 +479,13 @@ elif page == "Page 2 — Volunteer Map":
 
     st.markdown("<div class='sec-head'>🗺️ Volunteers Sworn In — by County (Filled Map)</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
+    st.markdown(f"""<div class='note-box'>
+        💡 <strong>What this tells you:</strong> The map shows Georgia counties shaded by how many new volunteers
+        were sworn in — <strong>darker red = more volunteers</strong>, light pink = fewer, white = none yet.
+        Counties share the count of their affiliate, so all counties in one affiliate region will have the same shade.
+        Use the quarter filter above to see which regions were most active in a specific time period.
+        This helps leadership quickly spot which parts of Georgia are growing their volunteer base.
+    </div>""", unsafe_allow_html=True)
 
     GA_COUNTY_FIPS = {
         'Appling':'13001','Atkinson':'13003','Bacon':'13005','Baker':'13007','Baldwin':'13009',
@@ -538,25 +603,53 @@ elif page == "Page 3 — Quarterly Analysis":
     st.markdown("<div class='sec-head'>📊 Inquiries vs. Volunteers Sworn In — by Quarter</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
 
+    st.markdown("""<div class='note-box'>
+        💡 <strong>What this tells you:</strong>
+        The <strong style="color:#002855">dark blue bars</strong> show how many people expressed interest in volunteering that quarter.
+        The <strong style="color:#C8102E">red bars</strong> show how many actually completed training and were sworn in.
+        The gap between the two bars is your <strong>pipeline</strong> — people who inquired but haven't been sworn in yet.
+        A smaller gap means your affiliate is doing a great job converting interest into active volunteers.
+        <strong>Amber/gold bars mean we don't have inquiry data for that quarter yet.</strong>
+    </div>""", unsafe_allow_html=True)
+
     QTR_LABELS = ['FY25 Q1<br>Jul–Sep 24','FY25 Q2<br>Oct–Dec 24','FY25 Q3<br>Jan–Mar 25',
                   'FY25 Q4<br>Apr–Jun 25','FY26 Q1<br>Jul–Sep 25','FY26 Q2<br>Oct–Dec 25','FY26 Q3<br>Jan–Mar 26']
     INQ_DATA  = [0, 77, 294, 0, 285, 255, 382]
     SWN_DATA  = [159,174,141,181,173,179,133]
     NO_DATA   = [True,False,False,True,False,False,False]
-    INQ_COLORS = ["rgba(245,166,35,0.55)" if nd else "rgba(0,40,85,0.88)" for nd in NO_DATA]
+    # Fix: use same dark blue for inquiries (not amber which was confusing the legend)
+    INQ_COLORS = ["rgba(245,166,35,0.6)" if nd else "rgba(0,40,85,0.88)" for nd in NO_DATA]
 
     fig_q = go.Figure()
-    fig_q.add_trace(go.Bar(name='Inquiries', x=QTR_LABELS, y=INQ_DATA,
+    fig_q.add_trace(go.Bar(
+        name='Inquiries (dark blue)',
+        x=QTR_LABELS, y=INQ_DATA,
         marker_color=INQ_COLORS, marker_line_width=0,
         text=[str(v) if v>0 else 'No data' for v in INQ_DATA], textposition='outside',
         hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>"))
-    fig_q.add_trace(go.Bar(name='Sworn In', x=QTR_LABELS, y=SWN_DATA,
+    fig_q.add_trace(go.Bar(
+        name='Sworn In (red)',
+        x=QTR_LABELS, y=SWN_DATA,
         marker_color="rgba(200,16,46,0.88)", marker_line_width=0,
         text=SWN_DATA, textposition='outside',
         hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>"))
-    style_fig(fig_q, 350)
-    fig_q.update_layout(barmode='group', bargap=0.25, bargroupgap=0.05,
-        legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
+    style_fig(fig_q, 370)
+    fig_q.update_layout(
+        barmode='group', bargap=0.25, bargroupgap=0.05,
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.04, xanchor="left", x=0,
+            font=dict(size=11),
+            itemsizing='constant',
+            traceorder='normal'
+        )
+    )
+    # Add a small annotation explaining amber bars
+    fig_q.add_annotation(
+        text="⚠️ Amber = no inquiry data available for that quarter",
+        xref="paper", yref="paper", x=0, y=-0.18,
+        showarrow=False, font=dict(size=10, color="#B8860B"),
+        align="left"
+    )
     st.plotly_chart(fig_q, use_container_width=True)
 
     # Conversion table
