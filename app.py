@@ -788,47 +788,42 @@ elif page == "Page 3 — Quarterly Analysis":
     # This ensures the legend shows the right color
     fig_q = go.Figure()
 
-    # Invisible trace just to set legend color for Inquiries
-    fig_q.add_trace(go.Bar(
-        name='Inquiries',
-        x=[None], y=[None],
-        marker_color="rgba(0,40,85,0.88)",
-        showlegend=True
-    ))
-    fig_q.add_trace(go.Bar(
-        name='Sworn In',
-        x=[None], y=[None],
-        marker_color="rgba(200,16,46,0.88)",
-        showlegend=True
-    ))
-
-    # Actual inquiry bars
+    # Inquiry bars
     fig_q.add_trace(go.Bar(
         name='Inquiries',
         x=QTR_LABELS, y=INQ_DATA,
         marker_color=INQ_COLORS, marker_line_width=0,
         text=[str(v) if v > 0 else 'No data' for v in INQ_DATA],
         textposition='outside',
-        showlegend=False,
-        hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>"))
+        hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>",
+        legendrank=1
+    ))
 
-    # Actual sworn-in bars
-    fig_q.add_trace(go.Bar(
-        name='Sworn In',
-        x=QTR_LABELS, y=SWN_DATA,
-        marker_color="rgba(200,16,46,0.88)", marker_line_width=0,
-        text=[str(v) if v > 0 else '—' for v in SWN_DATA],
-        textposition='outside',
-        showlegend=False,
-        hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>"))
+    # Sworn-in bars — only if we have data
+    if any(v > 0 for v in SWN_DATA):
+        fig_q.add_trace(go.Bar(
+            name='Sworn In',
+            x=QTR_LABELS, y=SWN_DATA,
+            marker_color="rgba(200,16,46,0.88)", marker_line_width=0,
+            text=[str(v) if v > 0 else '—' for v in SWN_DATA],
+            textposition='outside',
+            hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>",
+            legendrank=2
+        ))
+    else:
+        st.info("💡 Upload your sworn-in Excel to the data folder to see the Sworn In bars here.")
 
-    style_fig(fig_q, 400)
+    style_fig(fig_q, 420)
     fig_q.update_layout(
         barmode='group', bargap=0.2, bargroupgap=0.05,
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-            font=dict(size=12), itemsizing='constant'
-        )
+            font=dict(size=12), itemsizing='constant',
+            bgcolor="rgba(0,0,0,0)"
+        ),
+        # Force x-axis to treat labels as categories not numbers
+        xaxis=dict(type='category', gridcolor="#E8ECF0", linecolor=MIDGRAY,
+                   tickfont=dict(size=10))
     )
     fig_q.add_annotation(
         text="⚠️ Amber = no inquiry data available for that quarter",
