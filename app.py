@@ -245,13 +245,16 @@ def load_ga_geojson():
 @st.cache_data
 def load_data():
     data_dir = os.path.join(os.path.dirname(__file__), "data")
-    all_files = glob.glob(os.path.join(data_dir, "*.xlsx"))
-    all_files = [f for f in all_files if "volunteers" not in f.lower()]
+    all_files = glob.glob(os.path.join(data_dir, "*.xlsx")) + glob.glob(os.path.join(data_dir, "*.csv"))
+    all_files = [f for f in all_files if "volunteers" not in f.lower() and "sworn" not in f.lower()]
     all_dfs = []
     for path in all_files:
         try:
-            xl = pd.ExcelFile(path)
-            df = pd.read_excel(path, sheet_name=xl.sheet_names[0])
+            if path.endswith('.csv'):
+                df = pd.read_csv(path)
+            else:
+                xl = pd.ExcelFile(path)
+                df = pd.read_excel(path, sheet_name=xl.sheet_names[0])
             df['_source_file'] = os.path.basename(path)
             all_dfs.append(df)
         except Exception as e:
@@ -271,8 +274,85 @@ def load_data():
     combined['Month']          = combined['EntryDate'].dt.month
     combined['YearMonth']      = combined['EntryDate'].dt.to_period('M').astype(str)
     combined['MonthLabel']     = combined['EntryDate'].dt.strftime('%b %Y')
-    combined['Source']         = combined['Source'].fillna('Unknown')
-    combined['Affiliate']      = combined['County'].map(COUNTY_TO_AFF).fillna('Unassigned')
+
+    # ── Normalize source names across old and new file formats ────────────────
+    combined['Source'] = combined['Source'].fillna('Unknown')
+
+    # Reclassify "Other - give details in box below" using the details column
+    details_col = None
+    for c in combined.columns:
+        if 'detail' in str(c).lower() or ('comment' in str(c).lower() and 'how' in str(c).lower()):
+            details_col = c
+            break
+
+    def classify_other(text):
+        if pd.isna(text):
+            return 'Other'
+        t = str(text).lower().strip()
+        if any(x in t for x in ['google','online','search','website','internet','web','researching','looked up','volunteermatch','volunteer match','idealist','just serve','justserve','email','e-mail','browsing','came across','found it online']):
+            return 'Online Search'
+        if any(x in t for x in ['friend','colleague','coworker','co-worker','sister','brother','mother','father','husband','wife','family','neighbor','classmate','mentor','sorority','alumni','alumna','kappa','fraternity','partner','spouse','relative','aunt','uncle','cousin','nephew','niece','boss','supervisor','daughter','son','a friend','my friend','from a friend','word of mouth','people','someone told','told me','recommended','i know someone','i know volunteers','i know people','know volunteer','know a casa']):
+            return 'Personal Referral'
+        if any(x in t for x in ['former volunteer','previous volunteer','was a casa','was a volunteer','volunteered before','past volunteer','used to volunteer','used to be','previously volunteer','former casa','i was a casa','served as a casa','i am a casa','i volunteered for','volunteer in ','volunteering in','volunteer years','used to do it','casa in ohio','casa in hawaii','casa in ny','casa in louisiana','casa in maryland','casa in florida','casa in texas','casa of','used to work','previously worked','history with casa','experience with casa','transfer','was an approved','interned for casa','i use to be','i used to be','been involved','did florida ad item','started the process']):
+            return 'Past Experience'
+        if any(x in t for x in ['facebook','instagram','tiktok','twitter','social media','fb post','fb ad','ad popped','youtube','linkedin','tik tok','camp to belong','#save']):
+            return 'Social Media'
+        if any(x in t for x in ['tv','television','news','newscast','dr phil','broadcast','news report','news break','news first','anf','atlanta news','novel','book','documentary']):
+            return 'TV'
+        if any(x in t for x in ['work','employer','dfcs','dfas','dcfs','caseworker','social worker','court','judge','legal','lawyer','attorney','paralegal','human services','school','university','college','class','professor','training','internship','dfacs','impact training','criminal justice','degree','graduate','education','fletc','united way','department of','state representative','program director','licensed social']):
+            return 'Workplace'
+        if any(x in t for x in ['church','faith','ministry','pastor','religious','congregation','temple','mosque','community','fostering together','foster']):
+            return 'Church'
+        if any(x in t for x in ['flyer','flier','trifold','brochure','handout','newspaper','magazine','henry herald','print','newsletter','posting on']):
+            return 'Print/Newspaper'
+        if any(x in t for x in ['billboard','airport','yard sign','banner','advertisement']):
+            return 'Billboard'
+        if any(x in t for x in ['radio','podcast']):
+            return 'Radio'
+        if any(x in t for x in ['speaking','presentation','conference','seminar','panel','summit']):
+            return 'Speaking Engagement'
+        if any(x in t for x in ['heard','learned','became aware','always wanted','passion','interest','looking for ways','looking for volunteer','been looking','came across','i know','advocate','through volunteer','other volunteer','a fellow volunteer','through people','through others']):
+            return 'Personal Referral'
+        return 'Other'
+
+    # Apply reclassification to rows where source was "Other - give details..."
+    if details_col:
+        other_mask = combined['Source'].str.contains('Other - give details', na=False) | (combined['Source'] == 'Unknown')
+        combined.loc[other_mask, 'Source'] = combined.loc[other_mask, details_col].apply(classify_other)
+
+    src = combined['Source'].str.strip()
+    src_map = {
+        'Other - give details in box below': 'Other',
+        'Other - Give Details Below':        'Other',
+        'Online Search':                     'Online Search',
+        'Website':                           'Online Search',
+        'Personal Referral':                 'Personal Referral',
+        'Past Experience':                   'Past Experience',
+        'Social Media':                      'Social Media',
+        'Workplace':                         'Workplace',
+        'Workplace/University':              'Workplace',
+        'TV':                                'TV',
+        'Print':                             'Print/Newspaper',
+        'Newspaper':                         'Print/Newspaper',
+        'Flier':                             'Print/Newspaper',
+        'Billboard':                         'Billboard',
+        'Radio':                             'Radio',
+        'Church':                            'Church',
+        'Special Event':                     'Special Event',
+        'Speaking Engagement':               'Speaking Engagement',
+        "Don't Recall":                      "Don't Recall",
+        'Yard Sign':                         'Yard Sign',
+        'Podcast':                           'Podcast',
+        'Car Magnet':                        'Billboard',
+        'Unknown':                           'Other',
+    }
+    combined['Source'] = combined['Source'].map(src_map).fillna(combined['Source'])
+
+    # ── Affiliate — blank county → "No County Selected" not "Unassigned" ─────
+    combined['Affiliate'] = combined['County'].map(COUNTY_TO_AFF)
+    combined['Affiliate'] = combined['Affiliate'].fillna(
+        combined['County'].apply(lambda c: 'No County Selected' if pd.isna(c) or str(c).strip() in ['', 'nan', 'SELECT COUNTY BELOW', 'Georgia CASA'] else 'Other')
+    )
     def get_fy_quarter(ym):
         m = int(ym.split('-')[1])
         return 'Q1' if m in [7,8,9] else 'Q2' if m in [10,11,12] else 'Q3' if m in [1,2,3] else 'Q4'
@@ -311,13 +391,36 @@ with st.sidebar:
     st.markdown("<div style='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.5)'>Filter by Month</div>", unsafe_allow_html=True)
     month_options = sorted(df['YearMonth'].unique())
     month_labels  = {m: pd.Period(m,'M').strftime('%B %Y') for m in month_options}
-    select_all = st.checkbox("All Months", value=True)
+
+    # FY2026 = Jul 2025 → Jun 2026
+    fy2026_months = [m for m in month_options if
+                     (m >= '2025-07' and m <= '2025-12') or
+                     (m >= '2026-01' and m <= '2026-06')]
+
+    # FY filter buttons
+    st.markdown("<div style='font-size:10px;color:rgba(255,255,255,.6);margin-bottom:4px'>Quick select:</div>", unsafe_allow_html=True)
+    fy_col1, fy_col2 = st.columns(2)
+    with fy_col1:
+        if st.button("FY2026", use_container_width=True, key="fy26btn"):
+            st.session_state['month_selection'] = 'fy2026'
+    with fy_col2:
+        if st.button("All FYs", use_container_width=True, key="allbtn"):
+            st.session_state['month_selection'] = 'all'
+
+    # Default to FY2026 on first load
+    if 'month_selection' not in st.session_state:
+        st.session_state['month_selection'] = 'fy2026'
+
+    select_all = st.checkbox("All Months", value=(st.session_state['month_selection'] == 'all'))
+
     if select_all:
+        st.session_state['month_selection'] = 'all'
         selected_months = month_options
     else:
+        default_months = fy2026_months if st.session_state['month_selection'] == 'fy2026' else month_options[-3:]
         selected_months = st.multiselect("Choose months:", options=month_options,
                                           format_func=lambda x: month_labels[x],
-                                          default=month_options[-3:])
+                                          default=[m for m in default_months if m in month_options])
     if not selected_months:
         st.warning("Select at least one month.")
         st.stop()
@@ -358,12 +461,14 @@ if page == "Page 1 — Inquiries":
 
     # KPIs
     k1,k2,k3,k4 = st.columns(4)
+    # For KPIs exclude entries with no county selected
+    assigned = filtered[~filtered['Affiliate'].isin(['No County Selected','Other'])]
     top_src    = filtered['Source'].value_counts().idxmax() if not filtered.empty else "—"
     top_src_n  = filtered['Source'].value_counts().iloc[0] if not filtered.empty else 0
-    top_county = filtered['County'].value_counts().idxmax() if not filtered.empty else "—"
-    top_county_n = filtered['County'].value_counts().iloc[0] if not filtered.empty else 0
-    top_aff    = filtered['Affiliate'].value_counts().idxmax() if not filtered.empty else "—"
-    top_aff_n  = filtered['Affiliate'].value_counts().iloc[0] if not filtered.empty else 0
+    top_county = assigned['County'].value_counts().idxmax() if not assigned.empty else "—"
+    top_county_n = assigned['County'].value_counts().iloc[0] if not assigned.empty else 0
+    top_aff    = assigned['Affiliate'].value_counts().idxmax() if not assigned.empty else "—"
+    top_aff_n  = assigned['Affiliate'].value_counts().iloc[0] if not assigned.empty else 0
 
     with k1:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Inquiries</div><div class="kpi-value">{len(filtered):,}</div><div class="kpi-sub">Across {len(selected_months)} month(s)</div></div>', unsafe_allow_html=True)
@@ -460,7 +565,7 @@ if page == "Page 1 — Inquiries":
     county_counts.columns = ['County','Count']
     county_counts['Affiliate'] = county_counts['County'].map(COUNTY_TO_AFF).fillna('Other')
     # Remove unassigned/unknown entries from map display
-    county_counts = county_counts[~county_counts['Affiliate'].isin(['Other','Unassigned'])]
+    county_counts = county_counts[~county_counts['Affiliate'].isin(['Other','Unassigned','No County Selected'])]
     county_counts['Lat'] = county_counts['County'].map(lambda c: COUNTY_COORDS.get(c,(None,None))[0])
     county_counts['Lon'] = county_counts['County'].map(lambda c: COUNTY_COORDS.get(c,(None,None))[1])
     map_data = county_counts.dropna(subset=['Lat','Lon'])
@@ -490,7 +595,7 @@ if page == "Page 1 — Inquiries":
                         title=dict(text="Affiliate",font=dict(size=10))))
         st.plotly_chart(fig_map, use_container_width=True)
     with c3b:
-        aff_counts = filtered['Affiliate'].value_counts().head(15).reset_index()
+        aff_counts = filtered[~filtered['Affiliate'].isin(['No County Selected','Other'])]['Affiliate'].value_counts().head(15).reset_index()
         aff_counts.columns = ['Affiliate','Count']
         fig_aff = go.Figure(go.Bar(x=aff_counts['Count'], y=aff_counts['Affiliate'], orientation='h',
             marker_color=RED, text=aff_counts['Count'], textposition='outside',
@@ -608,7 +713,7 @@ elif page == "Page 2 — Volunteer Map":
     for county, fips in GA_COUNTY_FIPS.items():
         aff = COUNTY_TO_AFF.get(county)
         v = get_vol(aff) if aff else 0
-        county_rows.append({'County':county, 'FIPS':fips, 'Affiliate':aff or 'Unassigned', 'Count':v})
+        county_rows.append({'County':county, 'FIPS':fips, 'Affiliate':aff or 'No County Selected', 'Count':v})
     vol_county_df = pd.DataFrame(county_rows)
 
     c2a, c2b = st.columns([3,2])
