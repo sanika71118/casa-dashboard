@@ -781,60 +781,107 @@ elif page == "Page 3 — Quarterly Analysis":
 
     st.markdown("<div class='note-box'>Fiscal year quarters: <strong>Q1 = Jul–Sep &nbsp;|&nbsp; Q2 = Oct–Dec &nbsp;|&nbsp; Q3 = Jan–Mar &nbsp;|&nbsp; Q4 = Apr–Jun</strong> &nbsp;·&nbsp; All numbers calculated automatically from your data files.</div>", unsafe_allow_html=True)
 
-    # ── Build quarterly data DYNAMICALLY from loaded files ───────────────────
-    # Define all quarters we want to show (add more as needed)
-    QTR_DEFS = [
-        ('FY25 Q1', 'FY2025 Q1', ['2024-07','2024-08','2024-09'], 'Jul–Sep 24'),
-        ('FY25 Q2', 'FY2025 Q2', ['2024-10','2024-11','2024-12'], 'Oct–Dec 24'),
-        ('FY25 Q3', 'FY2025 Q3', ['2025-01','2025-02','2025-03'], 'Jan–Mar 25'),
-        ('FY25 Q4', 'FY2025 Q4', ['2025-04','2025-05','2025-06'], 'Apr–Jun 25'),
-        ('FY26 Q1', 'FY2026 Q1', ['2025-07','2025-08','2025-09'], 'Jul–Sep 25'),
-        ('FY26 Q2', 'FY2026 Q2', ['2025-10','2025-11','2025-12'], 'Oct–Dec 25'),
-        ('FY26 Q3', 'FY2026 Q3', ['2026-01','2026-02','2026-03'], 'Jan–Mar 26'),
-        ('FY26 Q4', 'FY2026 Q4', ['2026-04','2026-05','2026-06'], 'Apr–Jun 26'),
-    ]
+    # ── Build quarterly data 100% AUTOMATICALLY ──────────────────────────────
+    # Quarters are generated from:
+    #   1. Whatever months exist in your inquiry Excel files
+    #   2. Whatever FY columns exist in your sworn-in Excel
+    # Just add data — no code changes ever needed.
 
-    # Months we actually have inquiry data for
+    GROWTH_PLAN_FYS = {'FY24','FY25','FY26'}
+
+    # Quarter → months mapping helper
+    def fy_qtr_to_months(fy_year, qtr_num):
+        """Convert e.g. fy_year=2025, qtr_num=1 → ['2024-07','2024-08','2024-09']"""
+        # Q1=Jul-Sep, Q2=Oct-Dec, Q3=Jan-Mar, Q4=Apr-Jun
+        # FY year starts in July of the PREVIOUS calendar year
+        qtr_map = {
+            1: [(fy_year-1, 7), (fy_year-1, 8), (fy_year-1, 9)],
+            2: [(fy_year-1,10), (fy_year-1,11), (fy_year-1,12)],
+            3: [(fy_year,   1), (fy_year,   2), (fy_year,   3)],
+            4: [(fy_year,   4), (fy_year,   5), (fy_year,   6)],
+        }
+        return [f"{y}-{m:02d}" for y, m in qtr_map[qtr_num]]
+
+    def months_to_period_label(months):
+        first = pd.Period(months[0], 'M')
+        last  = pd.Period(months[-1], 'M')
+        return f"{first.strftime('%b')}–{last.strftime('%b %y')}"
+
+    # Parse sworn-in column names → set of (fy_year, qtr_num) tuples
+    import re
+    sworn_qtrs = set()
+    for col in VOL_QTR_COLS:
+        m = re.search(r'(\d{4}).*?(\d)[snrt][tdh]', col)
+        if m:
+            sworn_qtrs.add((int(m.group(1)), int(m.group(2))))
+
+    # Parse inquiry months → set of (fy_year, qtr_num) tuples
     available_months = set(df['YearMonth'].unique())
+    inq_qtrs = set()
+    for ym in available_months:
+        y, mo = int(ym.split('-')[0]), int(ym.split('-')[1])
+        fy = y + 1 if mo >= 7 else y
+        q = 1 if mo in [7,8,9] else 2 if mo in [10,11,12] else 3 if mo in [1,2,3] else 4
+        inq_qtrs.add((fy, q))
 
-    # Get sworn-in total per quarter label from VOL_QTR_LABELS
+    # Union of all quarters from either source, sorted chronologically
+    all_qtrs = sorted(inq_qtrs | sworn_qtrs)
+
+    # Build QTR_DEFS automatically
+    QTR_DEFS = []
+    for fy_year, qtr_num in all_qtrs:
+        fy_short = f"FY{str(fy_year)[2:]}"  # e.g. 'FY25'
+        short_lbl = f"{fy_short} Q{qtr_num}"
+        full_lbl  = f"FY{fy_year} Q{qtr_num}"
+        months    = fy_qtr_to_months(fy_year, qtr_num)
+        period    = months_to_period_label(months)
+        QTR_DEFS.append((short_lbl, full_lbl, months, period))
+
+    # Get sworn-in total per quarter label
     def get_sworn_for_qtr(short_label):
-        # Match e.g. 'FY25 Q1' -> index in VOL_QTR_LABELS
         for i, lbl in enumerate(VOL_QTR_LABELS):
             if lbl == short_label:
                 return sum(
                     (VOLUNTEER_DATA.get(aff, [])[i] if i < len(VOLUNTEER_DATA.get(aff, [])) else 0)
                     for aff in VOLUNTEER_DATA
                 )
-        return None  # No sworn-in data for this quarter
+        return None
 
-    QTR_LABELS, INQ_DATA, SWN_DATA, INQ_COLORS, HAS_INQ, TABLE_ROWS = [], [], [], [], [], []
+    QTR_LABELS, INQ_DATA, SWN_DATA, INQ_COLORS, HAS_INQ, IS_GP, TABLE_ROWS = [], [], [], [], [], [], []
 
     for short_lbl, full_lbl, months, period in QTR_DEFS:
-        # Count inquiries from actual data
         months_present = [m for m in months if m in available_months]
         months_missing = [m for m in months if m not in available_months]
         inq_count = len(df[df['YearMonth'].isin(months)])
-
-        # Sworn in
         sworn = get_sworn_for_qtr(short_lbl)
 
         # Only show quarter if we have either inquiries or sworn-in data
         if inq_count == 0 and sworn is None:
             continue
 
+        fy_tag = short_lbl[:4]  # e.g. 'FY24'
+        is_gp = fy_tag in GROWTH_PLAN_FYS
+        IS_GP.append(is_gp)
         has_inq = inq_count > 0
         HAS_INQ.append(has_inq)
         QTR_LABELS.append(f"{short_lbl}<br>{period}")
         INQ_DATA.append(inq_count)
         SWN_DATA.append(sworn if sworn is not None else 0)
 
+        # Color logic — Option 1: growth plan = CASA red, pre-growth = gray
+        # Amber override if no inquiry data at all
         if not has_inq:
-            INQ_COLORS.append("rgba(245,166,35,0.55)")  # amber = no data
-        elif len(months_missing) > 0:
-            INQ_COLORS.append("rgba(0,40,85,0.55)")      # faded = partial
+            INQ_COLORS.append("rgba(245,166,35,0.55)")   # amber = no data
+        elif is_gp:
+            if months_missing:
+                INQ_COLORS.append("rgba(200,16,46,0.55)") # faded red = partial
+            else:
+                INQ_COLORS.append("rgba(200,16,46,0.88)") # solid red = growth plan
         else:
-            INQ_COLORS.append("rgba(0,40,85,0.88)")      # full blue = complete
+            if months_missing:
+                INQ_COLORS.append("rgba(120,125,140,0.45)") # faded gray = partial
+            else:
+                INQ_COLORS.append("rgba(100,105,120,0.75)") # solid gray = pre-growth
 
         # Table row
         if not has_inq:
@@ -882,11 +929,11 @@ elif page == "Page 3 — Quarterly Analysis":
 
     st.markdown("""<div class='note-box'>
         💡 <strong>What this tells you:</strong>
-        The <strong style="color:#002855">dark blue bars</strong> show how many people expressed interest in volunteering that quarter.
-        The <strong style="color:#C8102E">red bars</strong> show how many actually completed training and were sworn in.
-        The gap between the two bars is your <strong>pipeline</strong> — people who inquired but haven't been sworn in yet.
-        A smaller gap means your affiliate is doing a great job converting interest into active volunteers.
-        <strong>Amber bars = no inquiry file available for that quarter. Faded blue = partial data.</strong>
+        <strong style="color:#646478">Gray bars</strong> = pre-growth plan years (FY2021–FY2023).
+        <strong style="color:#C8102E">Red bars</strong> = growth plan years (FY2024–FY2026) — this is when the strategic growth initiative was implemented.
+        <strong style="color:#C8102E">Red sworn-in bars</strong> show volunteers completing training each quarter.
+        The gap between inquiry and sworn-in bars is your conversion pipeline.
+        <strong>Amber = no inquiry data available for that quarter.</strong>
     </div>""", unsafe_allow_html=True)
 
     # Two separate traces: one for "has data" bars and one for "no data" bars
@@ -932,10 +979,33 @@ elif page == "Page 3 — Quarterly Analysis":
     )
     fig_q.add_annotation(
         text="⚠️ Amber = no inquiry data available for that quarter",
-        xref="paper", yref="paper", x=0, y=-0.18,
+        xref="paper", yref="paper", x=0, y=-0.22,
         showarrow=False, font=dict(size=10, color="#B8860B"), align="left"
     )
     st.plotly_chart(fig_q, use_container_width=True)
+
+    # Growth plan legend
+    st.markdown(f"""
+    <div style="display:flex;gap:20px;flex-wrap:wrap;padding:8px 4px;font-size:12px;color:#444;align-items:center">
+        <span style="font-weight:700;color:#002855">Legend:</span>
+        <span style="display:flex;align-items:center;gap:6px">
+            <span style="width:16px;height:16px;border-radius:3px;background:rgba(100,105,120,0.75);display:inline-block"></span>
+            Inquiries — Pre-growth plan (FY21–FY23)
+        </span>
+        <span style="display:flex;align-items:center;gap:6px">
+            <span style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.88);display:inline-block"></span>
+            Inquiries — Growth plan years (FY24–FY26)
+        </span>
+        <span style="display:flex;align-items:center;gap:6px">
+            <span style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.88);border:2px solid #7A0818;display:inline-block"></span>
+            Sworn In
+        </span>
+        <span style="display:flex;align-items:center;gap:6px">
+            <span style="width:16px;height:16px;border-radius:3px;background:rgba(245,166,35,0.55);display:inline-block"></span>
+            No inquiry data
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Conversion table — built dynamically
     conv_df = pd.DataFrame(TABLE_ROWS)
