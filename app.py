@@ -497,10 +497,21 @@ if page == "Page 1 — Inquiries":
             The dotted line shows the trend. <strong>{peak_month}</strong> had the highest interest with <strong>{peak_val}</strong> inquiries,
             while <strong>{low_month}</strong> was the lowest with <strong>{low_val}</strong>.
             The average is <strong>{avg_val} inquiries/month</strong> and the overall trend is <strong>{trend_dir}</strong>.
+            &nbsp;|&nbsp; <span style="color:#C8102E;font-weight:700">■ Red</span> = Growth plan era (FY2024+) &nbsp;
+            <span style="color:#D4607A;font-weight:700">■ Rose</span> = Pre-growth plan
         </div>""", unsafe_allow_html=True)
     fig1 = go.Figure()
-    fig1.add_trace(go.Bar(x=monthly['MonthLabel'], y=monthly['Count'],
-        marker_color=RED, marker_line_color=DKBLUE, marker_line_width=1,
+    # Color each bar: CASA red = growth plan (FY24+), light rose = pre-growth
+    def bar_color(ym):
+        y, m = int(ym.split('-')[0]), int(ym.split('-')[1])
+        fy = y+1 if m >= 7 else y
+        return RED if fy >= 2024 else "#F4A0A8"
+    bar_colors = [bar_color(ym) for ym in monthly['YearMonth']]
+    fig1.add_trace(go.Bar(
+        x=monthly['MonthLabel'], y=monthly['Count'],
+        marker_color=bar_colors,
+        marker_line_color=[DKBLUE if c==RED else "#C8607A" for c in bar_colors],
+        marker_line_width=0.5,
         text=monthly['Count'], textposition='outside',
         textfont=dict(color=DKBLUE, size=11, family="Arial Black"),
         hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>"))
@@ -827,9 +838,13 @@ elif page == "Page 3 — Quarterly Analysis":
     # Union of all quarters from either source, sorted chronologically
     all_qtrs = sorted(inq_qtrs | sworn_qtrs)
 
-    # Build QTR_DEFS automatically
+    # Only show FY2024 onwards in the quarterly chart
+    # Pre-growth years still load for context but are excluded from this view
+    FY_CUTOFF = 2024
+    all_qtrs_filtered = [(fy, q) for fy, q in all_qtrs if fy >= FY_CUTOFF]
+
     QTR_DEFS = []
-    for fy_year, qtr_num in all_qtrs:
+    for fy_year, qtr_num in all_qtrs_filtered:
         fy_short = f"FY{str(fy_year)[2:]}"  # e.g. 'FY25'
         short_lbl = f"{fy_short} Q{qtr_num}"
         full_lbl  = f"FY{fy_year} Q{qtr_num}"
@@ -929,11 +944,10 @@ elif page == "Page 3 — Quarterly Analysis":
 
     st.markdown("""<div class='note-box'>
         💡 <strong>What this tells you:</strong>
-        <strong style="color:#646478">Gray bars</strong> = pre-growth plan years (FY2021–FY2023).
-        <strong style="color:#C8102E">Red bars</strong> = growth plan years (FY2024–FY2026) — this is when the strategic growth initiative was implemented.
-        <strong style="color:#C8102E">Red sworn-in bars</strong> show volunteers completing training each quarter.
-        The gap between inquiry and sworn-in bars is your conversion pipeline.
-        <strong>Amber = no inquiry data available for that quarter.</strong>
+        <strong style="color:#C8102E">Red bars</strong> = inquiries during growth plan years (FY2024 onwards).
+        <strong style="color:#C8102E">Darker red bars</strong> = volunteers sworn in that quarter.
+        The gap between the two bars is your conversion pipeline — people who showed interest but haven't been sworn in yet.
+        A smaller gap = better conversion. <strong>Amber = no inquiry data for that quarter yet.</strong>
     </div>""", unsafe_allow_html=True)
 
     # Two separate traces: one for "has data" bars and one for "no data" bars
@@ -989,12 +1003,8 @@ elif page == "Page 3 — Quarterly Analysis":
     <div style="display:flex;gap:20px;flex-wrap:wrap;padding:8px 4px;font-size:12px;color:#444;align-items:center">
         <span style="font-weight:700;color:#002855">Legend:</span>
         <span style="display:flex;align-items:center;gap:6px">
-            <span style="width:16px;height:16px;border-radius:3px;background:rgba(100,105,120,0.75);display:inline-block"></span>
-            Inquiries — Pre-growth plan (FY21–FY23)
-        </span>
-        <span style="display:flex;align-items:center;gap:6px">
             <span style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.88);display:inline-block"></span>
-            Inquiries — Growth plan years (FY24–FY26)
+            Inquiries — Growth plan (FY24+)
         </span>
         <span style="display:flex;align-items:center;gap:6px">
             <span style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.88);border:2px solid #7A0818;display:inline-block"></span>
@@ -1002,7 +1012,7 @@ elif page == "Page 3 — Quarterly Analysis":
         </span>
         <span style="display:flex;align-items:center;gap:6px">
             <span style="width:16px;height:16px;border-radius:3px;background:rgba(245,166,35,0.55);display:inline-block"></span>
-            No inquiry data
+            No inquiry data yet
         </span>
     </div>
     """, unsafe_allow_html=True)
