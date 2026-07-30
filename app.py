@@ -944,9 +944,9 @@ elif page == "Page 3 — Quarterly Analysis":
 
     st.markdown("""<div class='note-box'>
         💡 <strong>What this tells you:</strong>
-        <strong style="color:#C8102E">Red bars</strong> = inquiries during growth plan years (FY2024 onwards).
-        <strong style="color:#C8102E">Darker red bars</strong> = volunteers sworn in that quarter.
-        The gap between the two bars is your conversion pipeline — people who showed interest but haven't been sworn in yet.
+        <strong style="color:#C8102E">Red bars</strong> = inquiries (people who showed interest in volunteering).
+        <strong style="color:#002855">Dark blue bars</strong> = volunteers sworn in that quarter.
+        The gap between the two bars is your conversion pipeline — people who inquired but haven't been sworn in yet.
         A smaller gap = better conversion. <strong>Amber = no inquiry data for that quarter yet.</strong>
     </div>""", unsafe_allow_html=True)
 
@@ -970,7 +970,7 @@ elif page == "Page 3 — Quarterly Analysis":
         fig_q.add_trace(go.Bar(
             name='Sworn In',
             x=QTR_LABELS, y=SWN_DATA,
-            marker_color="rgba(200,16,46,0.88)", marker_line_width=0,
+            marker_color="rgba(0,40,85,0.88)", marker_line_width=0,
             text=[str(v) if v > 0 else '—' for v in SWN_DATA],
             textposition='outside',
             hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>",
@@ -1007,7 +1007,7 @@ elif page == "Page 3 — Quarterly Analysis":
             Inquiries — Growth plan (FY24+)
         </span>
         <span style="display:flex;align-items:center;gap:6px">
-            <span style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.88);border:2px solid #7A0818;display:inline-block"></span>
+            <span style="width:16px;height:16px;border-radius:3px;background:rgba(0,40,85,0.88);display:inline-block"></span>
             Sworn In
         </span>
         <span style="display:flex;align-items:center;gap:6px">
