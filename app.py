@@ -786,284 +786,234 @@ elif page == "Page 2 — Volunteer Map":
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE 3 — QUARTERLY ANALYSIS
+# PAGE 3 — QUARTERLY TRENDS
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "Page 3 — Quarterly Analysis":
-
     st.markdown(f"""<div class="casa-header">
-        <h1>⚖️ CASA Georgia — Quarterly Analysis</h1>
-        <p>Inquiries vs. volunteers sworn in &nbsp;|&nbsp; by fiscal quarter</p>
+        <h1>⚖️ CASA Georgia — Quarterly Trends</h1>
+        <p>How inquiries and sworn-in volunteers are moving over time</p>
     </div>""", unsafe_allow_html=True)
 
-    st.markdown("<div class='note-box'>Fiscal year quarters: <strong>Q1 = Jul–Sep &nbsp;|&nbsp; Q2 = Oct–Dec &nbsp;|&nbsp; Q3 = Jan–Mar &nbsp;|&nbsp; Q4 = Apr–Jun</strong> &nbsp;·&nbsp; All numbers calculated automatically from your data files.</div>", unsafe_allow_html=True)
-
-    # ── Build quarterly data 100% AUTOMATICALLY ──────────────────────────────
-    # Quarters are generated from:
-    #   1. Whatever months exist in your inquiry Excel files
-    #   2. Whatever FY columns exist in your sworn-in Excel
-    # Just add data — no code changes ever needed.
-
-    GROWTH_PLAN_FYS = {'FY24','FY25','FY26'}
-
-    # Quarter → months mapping helper
-    def fy_qtr_to_months(fy_year, qtr_num):
-        """Convert e.g. fy_year=2025, qtr_num=1 → ['2024-07','2024-08','2024-09']"""
-        # Q1=Jul-Sep, Q2=Oct-Dec, Q3=Jan-Mar, Q4=Apr-Jun
-        # FY year starts in July of the PREVIOUS calendar year
-        qtr_map = {
-            1: [(fy_year-1, 7), (fy_year-1, 8), (fy_year-1, 9)],
-            2: [(fy_year-1,10), (fy_year-1,11), (fy_year-1,12)],
-            3: [(fy_year,   1), (fy_year,   2), (fy_year,   3)],
-            4: [(fy_year,   4), (fy_year,   5), (fy_year,   6)],
-        }
-        return [f"{y}-{m:02d}" for y, m in qtr_map[qtr_num]]
-
-    def months_to_period_label(months):
-        first = pd.Period(months[0], 'M')
-        last  = pd.Period(months[-1], 'M')
-        return f"{first.strftime('%b')}–{last.strftime('%b %y')}"
-
-    # Parse sworn-in column names → set of (fy_year, qtr_num) tuples
     import re
-    sworn_qtrs = set()
-    for col in VOL_QTR_COLS:
-        m = re.search(r'(\d{4}).*?(\d)[snrt][tdh]', col)
+
+    # ── Build one quarterly fact table both charts read from ──────────────────
+    def q_months(fy, q):
+        y, m = {1: (fy - 1, 7), 2: (fy - 1, 10), 3: (fy, 1), 4: (fy, 4)}[q]
+        return [f"{y}-{m + k:02d}" for k in range(3)]
+
+    def q_shift(fy, q, back):          # move back N quarters
+        n = fy * 4 + (q - 1) - back
+        return n // 4, n % 4 + 1
+
+    avail_months = set(df['YearMonth'].unique())
+
+    sworn_idx = {}
+    for i, lbl in enumerate(VOL_QTR_LABELS):
+        m = re.match(r'FY(\d{2}) Q(\d)', lbl)
         if m:
-            sworn_qtrs.add((int(m.group(1)), int(m.group(2))))
+            sworn_idx[(2000 + int(m.group(1)), int(m.group(2)))] = i
 
-    # Parse inquiry months → set of (fy_year, qtr_num) tuples
-    available_months = set(df['YearMonth'].unique())
-    inq_qtrs = set()
-    for ym in available_months:
-        y, mo = int(ym.split('-')[0]), int(ym.split('-')[1])
+    inq_q = set()
+    for ym in avail_months:
+        y, mo = int(ym[:4]), int(ym[5:7])
         fy = y + 1 if mo >= 7 else y
-        q = 1 if mo in [7,8,9] else 2 if mo in [10,11,12] else 3 if mo in [1,2,3] else 4
-        inq_qtrs.add((fy, q))
+        q = 1 if mo in (7, 8, 9) else 2 if mo in (10, 11, 12) else 3 if mo in (1, 2, 3) else 4
+        inq_q.add((fy, q))
 
-    # Union of all quarters from either source, sorted chronologically
-    all_qtrs = sorted(inq_qtrs | sworn_qtrs)
-
-    # Only show FY2024 onwards in the quarterly chart
-    # Pre-growth years still load for context but are excluded from this view
-    FY_CUTOFF = 2024
-    all_qtrs_filtered = [(fy, q) for fy, q in all_qtrs if fy >= FY_CUTOFF]
-
-    QTR_DEFS = []
-    for fy_year, qtr_num in all_qtrs_filtered:
-        fy_short = f"FY{str(fy_year)[2:]}"  # e.g. 'FY25'
-        short_lbl = f"{fy_short} Q{qtr_num}"
-        full_lbl  = f"FY{fy_year} Q{qtr_num}"
-        months    = fy_qtr_to_months(fy_year, qtr_num)
-        period    = months_to_period_label(months)
-        QTR_DEFS.append((short_lbl, full_lbl, months, period))
-
-    # Get sworn-in total per quarter label
-    def get_sworn_for_qtr(short_label):
-        for i, lbl in enumerate(VOL_QTR_LABELS):
-            if lbl == short_label:
-                return sum(
-                    (VOLUNTEER_DATA.get(aff, [])[i] if i < len(VOLUNTEER_DATA.get(aff, [])) else 0)
-                    for aff in VOLUNTEER_DATA
-                )
-        return None
-
-    QTR_LABELS, INQ_DATA, SWN_DATA, INQ_COLORS, HAS_INQ, IS_GP, TABLE_ROWS = [], [], [], [], [], [], []
-
-    for short_lbl, full_lbl, months, period in QTR_DEFS:
-        months_present = [m for m in months if m in available_months]
-        months_missing = [m for m in months if m not in available_months]
-        inq_count = len(df[df['YearMonth'].isin(months)])
-        sworn = get_sworn_for_qtr(short_lbl)
-
-        # Only show quarter if we have either inquiries or sworn-in data
-        if inq_count == 0 and sworn is None:
-            continue
-
-        fy_tag = short_lbl[:4]  # e.g. 'FY24'
-        is_gp = fy_tag in GROWTH_PLAN_FYS
-        IS_GP.append(is_gp)
-        has_inq = inq_count > 0
-        HAS_INQ.append(has_inq)
-        QTR_LABELS.append(f"{short_lbl}<br>{period}")
-        INQ_DATA.append(inq_count)
-        SWN_DATA.append(sworn if sworn is not None else 0)
-
-        # Color logic — Option 1: growth plan = CASA red, pre-growth = gray
-        # Amber override if no inquiry data at all
-        if not has_inq:
-            INQ_COLORS.append("rgba(245,166,35,0.55)")   # amber = no data
-        elif is_gp:
-            if months_missing:
-                INQ_COLORS.append("rgba(200,16,46,0.55)") # faded red = partial
-            else:
-                INQ_COLORS.append("rgba(200,16,46,0.88)") # solid red = growth plan
-        else:
-            if months_missing:
-                INQ_COLORS.append("rgba(120,125,140,0.45)") # faded gray = partial
-            else:
-                INQ_COLORS.append("rgba(100,105,120,0.75)") # solid gray = pre-growth
-
-        # Table row
-        if not has_inq:
-            inq_str = "No data"
-            conv_str = "—"
-        elif months_missing:
-            missing_labels = [pd.Period(m,'M').strftime('%b') for m in months_missing]
-            inq_str = f"{inq_count} ({', '.join(missing_labels)} missing)"
-            conv_str = "Partial"
-        else:
-            inq_str = str(inq_count)
-            conv_str = f"{round(sworn/inq_count*100)}%" if sworn and inq_count else "—"
-
-        TABLE_ROWS.append({
-            'Quarter': full_lbl,
-            'Period':  period.replace('–','–'),
-            'Inquiries': inq_str,
-            'Sworn In': str(sworn) if sworn is not None else "Not yet available",
-            'Conversion': conv_str,
+    rows = []
+    for fy, q in sorted(inq_q | set(sworn_idx)):
+        lbl = f"FY{str(fy)[2:]} Q{q}"
+        months = q_months(fy, q)
+        missing = [m for m in months if m not in avail_months]
+        i = sworn_idx.get((fy, q))
+        sworn = (sum(v[i] for v in VOLUNTEER_DATA.values() if i < len(v))
+                 if i is not None else None)
+        rows.append({
+            'fy': fy, 'q': q, 'label': lbl,
+            'period': f"{pd.Period(months[0],'M').strftime('%b')}–{pd.Period(months[-1],'M').strftime('%b %y')}",
+            'inq': int((df['FYLabel'] == lbl).sum()),
+            'sworn': sworn,
+            'complete': len(missing) == 0,
+            'missing': ", ".join(pd.Period(m, 'M').strftime('%b') for m in missing),
         })
+    qdf = pd.DataFrame(rows)
+    qlook = {(r.fy, r.q): r for r in qdf.itertuples()}
 
-    # KPIs — now calculated from real data
-    total_sworn_all = sum(sum(v) for v in VOLUNTEER_DATA.values())
-    total_inq_matched = sum(c for c,h in zip(INQ_DATA,HAS_INQ) if h)
-    best_sworn_val = max((s for s in SWN_DATA if s > 0), default=0)
-    best_sworn_lbl = QTR_LABELS[SWN_DATA.index(best_sworn_val)].replace('<br>',' ') if best_sworn_val else "—"
-    most_inq_val = max(INQ_DATA) if INQ_DATA else 0
-    most_inq_lbl = QTR_LABELS[INQ_DATA.index(most_inq_val)].replace('<br>',' ') if most_inq_val else "—"
+    # ── KPIs — year-over-year, not quarter-over-quarter ───────────────────────
+    usable = qdf[(qdf['sworn'].notna()) & (qdf['complete'])]
+    if usable.empty:
+        st.warning("Not enough complete quarters to compute trends yet.")
+        st.stop()
+    last = usable.iloc[-1]
+    py = qlook.get((int(last['fy']) - 1, int(last['q'])))
 
-    k1,k2,k3,k4 = st.columns(4)
+    def pct(now, then):
+        if then is None or then == 0:
+            return None
+        return round((now - then) / then * 100)
+
+    inq_yoy   = pct(last['inq'],   py.inq   if py else None)
+    sworn_yoy = pct(last['sworn'], py.sworn if py and py.sworn is not None else None)
+
+    def arrow(v):
+        if v is None:
+            return "no prior year"
+        return f"{'▲' if v > 0 else '▼' if v < 0 else '■'} {abs(v)}% vs {last['label'][:4].replace('FY','FY')[:2]}{int(last['fy'])-1-2000} {last['label'][-2:]}"
+
+    # trailing 4 quarters vs the 4 before that
+    t4  = usable.tail(4)
+    p4  = usable.iloc[-8:-4] if len(usable) >= 8 else pd.DataFrame()
+    t4_sworn = int(t4['sworn'].sum())
+    p4_sworn = int(p4['sworn'].sum()) if not p4.empty else None
+    t4_yoy   = pct(t4_sworn, p4_sworn)
+
+    # yield: sworn this quarter vs inquiries 2 quarters earlier
+    LAG = 2
+    def yield_for(fy, q):
+        src = qlook.get(q_shift(fy, q, LAG))
+        tgt = qlook.get((fy, q))
+        if not src or not tgt or tgt.sworn is None or not src.inq or not src.complete:
+            return None
+        return round(tgt.sworn / src.inq * 100)
+
+    y_now = yield_for(int(last['fy']), int(last['q']))
+
+    k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Sworn In</div><div class="kpi-value">{total_sworn_all:,}</div><div class="kpi-sub">All quarters in file</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Inquiries — {last["label"]}</div><div class="kpi-value">{last["inq"]:,}</div><div class="kpi-sub">{arrow(inq_yoy)}</div></div>', unsafe_allow_html=True)
     with k2:
-        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Total Inquiries</div><div class="kpi-value">{total_inq_matched:,}</div><div class="kpi-sub">Quarters with full data</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Sworn In — {last["label"]}</div><div class="kpi-value">{int(last["sworn"]):,}</div><div class="kpi-sub">{arrow(sworn_yoy)}</div></div>', unsafe_allow_html=True)
     with k3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Best Sworn-in Qtr</div><div class="kpi-value">{best_sworn_val}</div><div class="kpi-sub">{best_sworn_lbl}</div></div>', unsafe_allow_html=True)
+        sub = f"vs {p4_sworn:,} prior 4 qtrs" if p4_sworn else "not enough history"
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Sworn In — Last 4 Quarters</div><div class="kpi-value">{t4_sworn:,}</div><div class="kpi-sub">{sub}{"" if t4_yoy is None else f" · {t4_yoy:+d}%"}</div></div>', unsafe_allow_html=True)
     with k4:
-        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Most Inquiries</div><div class="kpi-value">{most_inq_val:,}</div><div class="kpi-sub">{most_inq_lbl}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Yield per 100 Inquiries</div><div class="kpi-value">{y_now if y_now is not None else "—"}</div><div class="kpi-sub">sworn in {last["label"]} vs inquiries 2 qtrs earlier</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    # Chart: Inquiries vs Sworn In
-    st.markdown("<div class='sec-head'>📊 Inquiries vs. Volunteers Sworn In — by Quarter</div>", unsafe_allow_html=True)
+    # ── 1. The funnel over time ───────────────────────────────────────────────
+    st.markdown("<div class='sec-head'>📊 1. Inquiries vs. Volunteers Sworn In — every quarter</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
-
     st.markdown("""<div class='note-box'>
-        💡 <strong>What this tells you:</strong>
-        <strong style="color:#C8102E">Red bars</strong> = inquiries (people who showed interest in volunteering).
-        <strong style="color:#002855">Dark blue bars</strong> = volunteers sworn in that quarter.
-        The gap between the two bars is your conversion pipeline — people who inquired but haven't been sworn in yet.
-        A smaller gap = better conversion. <strong>Amber = no inquiry data for that quarter yet.</strong>
+        💡 <strong>What this tells you:</strong> The pale bar is everyone who inquired that quarter; the solid navy bar
+        sitting inside it is volunteers sworn in. The exposed pale portion is the gap — interest that has not (yet)
+        become a sworn volunteer. Watch whether the navy is filling more of the pale bar over time.
+        Bars are drawn for every quarter in your data, so pre-growth-plan quarters are visible for contrast.
     </div>""", unsafe_allow_html=True)
 
-    # Two separate traces: one for "has data" bars and one for "no data" bars
-    # This ensures the legend shows the right color
+    show = qdf[(qdf['inq'] > 0) | (qdf['sworn'].notna())].copy()
+    xlab = [f"{r.label}<br>{r.period}" for r in show.itertuples()]
+
     fig_q = go.Figure()
-
-    # Inquiry bars
     fig_q.add_trace(go.Bar(
-        name='Inquiries',
-        x=QTR_LABELS, y=INQ_DATA,
-        marker_color=INQ_COLORS, marker_line_width=0,
-        text=[str(v) if v > 0 else 'No data' for v in INQ_DATA],
-        textposition='outside',
-        hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>",
-        legendrank=1
-    ))
-
-    # Sworn-in bars — only if we have data
-    if any(v > 0 for v in SWN_DATA):
-        fig_q.add_trace(go.Bar(
-            name='Sworn In',
-            x=QTR_LABELS, y=SWN_DATA,
-            marker_color="rgba(0,40,85,0.88)", marker_line_width=0,
-            text=[str(v) if v > 0 else '—' for v in SWN_DATA],
-            textposition='outside',
-            hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>",
-            legendrank=2
-        ))
-    else:
-        st.info("💡 Upload your sworn-in Excel to the data folder to see the Sworn In bars here.")
-
+        name='Inquiries', x=xlab, y=show['inq'],
+        marker_color="#C7D2E0", marker_line_width=0, width=0.62,
+        text=show['inq'], textposition='outside', cliponaxis=False,
+        textfont=dict(size=10, color="#5A6B80"),
+        hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>"))
+    fig_q.add_trace(go.Bar(
+        name='Sworn In', x=xlab, y=show['sworn'].fillna(0),
+        marker_color=DKBLUE, marker_line_width=0, width=0.30,
+        text=[("" if pd.isna(v) else int(v)) for v in show['sworn']],
+        textposition='inside', insidetextanchor='middle',
+        textfont=dict(size=10, color=WHITE),
+        hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>"))
     style_fig(fig_q, 420)
     fig_q.update_layout(
-        barmode='group', bargap=0.2, bargroupgap=0.05,
-        legend=dict(
-            orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-            font=dict(size=12), itemsizing='constant',
-            bgcolor="rgba(0,0,0,0)"
-        ),
-        # Force x-axis to treat labels as categories not numbers
+        barmode='overlay', bargap=0.28,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    font=dict(size=12), bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(type='category', gridcolor="#E8ECF0", linecolor=MIDGRAY,
-                   tickfont=dict(size=10))
-    )
-    fig_q.add_annotation(
-        text="⚠️ Amber = no inquiry data available for that quarter",
-        xref="paper", yref="paper", x=0, y=-0.22,
-        showarrow=False, font=dict(size=10, color="#B8860B"), align="left"
-    )
+                   tickfont=dict(size=9)))
     st.plotly_chart(fig_q, use_container_width=True)
-
-    # Growth plan legend
-    st.markdown(f"""
-    <div style="display:flex;gap:20px;flex-wrap:wrap;padding:8px 4px;font-size:12px;color:#444;align-items:center">
-        <span style="font-weight:700;color:#002855">Legend:</span>
-        <span style="display:flex;align-items:center;gap:6px">
-            <span style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.88);display:inline-block"></span>
-            Inquiries — Growth plan (FY24+)
-        </span>
-        <span style="display:flex;align-items:center;gap:6px">
-            <span style="width:16px;height:16px;border-radius:3px;background:rgba(0,40,85,0.88);display:inline-block"></span>
-            Sworn In
-        </span>
-        <span style="display:flex;align-items:center;gap:6px">
-            <span style="width:16px;height:16px;border-radius:3px;background:rgba(245,166,35,0.55);display:inline-block"></span>
-            No inquiry data yet
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Conversion table — built dynamically
-    conv_df = pd.DataFrame(TABLE_ROWS)
-    st.dataframe(conv_df, use_container_width=True, hide_index=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Affiliate breakdown
-    st.markdown("<div class='sec-head'>🏢 New Volunteers Sworn In by Affiliate — by Quarter</div>", unsafe_allow_html=True)
+    # ── 2. Same quarter, year over year ───────────────────────────────────────
+    st.markdown("<div class='sec-head'>📈 2. Same Quarter, Year Over Year</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
+    st.markdown("""<div class='note-box'>
+        💡 <strong>Why this chart matters most:</strong> Volunteer recruitment is seasonal, so comparing Q2 to Q1
+        mostly measures the calendar. Comparing <strong>Q1 to last year's Q1</strong> is a fair comparison.
+        Each cluster is one fiscal quarter; darker bars are more recent years. Rising bars left-to-right within
+        a cluster means real growth, not a seasonal bump.
+    </div>""", unsafe_allow_html=True)
 
-    st.markdown("<div style='font-size:12px;font-weight:700;color:#002855;margin-bottom:4px'>Filter by Quarter (select one or more):</div>", unsafe_allow_html=True)
-    col_all3, col_qtrs3 = st.columns([1,4])
-    with col_all3:
-        select_all_qtrs3 = st.checkbox("All", value=True, key="p3_all")
-    with col_qtrs3:
-        if select_all_qtrs3:
-            selected_qtrs3 = VOL_QTR_LABELS
-            st.multiselect("", VOL_QTR_LABELS, default=VOL_QTR_LABELS, key="p3_multi", disabled=True, label_visibility="collapsed")
-        else:
-            selected_qtrs3 = st.multiselect("", VOL_QTR_LABELS, default=[VOL_QTR_LABELS[-1]] if VOL_QTR_LABELS else [], key="p3_multi2", label_visibility="collapsed")
-            if not selected_qtrs3:
-                selected_qtrs3 = VOL_QTR_LABELS
+    metric = st.radio("Metric", ["Sworn In", "Inquiries"], horizontal=True,
+                      key="p3_yoy_metric", label_visibility="collapsed")
+    col = 'sworn' if metric == "Sworn In" else 'inq'
+    yoy = qdf[qdf[col].notna()]
+    fys = sorted(yoy['fy'].unique())
+    shades = ["#BBC9DB", "#7B95B5", "#3E6591", DKBLUE][-len(fys):] if len(fys) <= 4 \
+             else ["#D3DCE7", "#BBC9DB", "#93AAC7", "#6C8CB0", "#3E6591", DKBLUE][-len(fys):]
 
-    selected_idxs3 = [VOL_QTR_LABELS.index(q) for q in selected_qtrs3 if q in VOL_QTR_LABELS]
+    fig_yoy = go.Figure()
+    for shade, fy in zip(shades, fys):
+        sub = yoy[yoy['fy'] == fy].set_index('q')[col].reindex([1, 2, 3, 4])
+        fig_yoy.add_trace(go.Bar(
+            name=f"FY{fy}", x=["Q1<br>Jul–Sep", "Q2<br>Oct–Dec", "Q3<br>Jan–Mar", "Q4<br>Apr–Jun"],
+            y=sub.values, marker_color=shade, marker_line_width=0,
+            text=[("" if pd.isna(v) else int(v)) for v in sub.values],
+            textposition='outside', cliponaxis=False, textfont=dict(size=10, color=DKBLUE),
+            hovertemplate="<b>FY" + str(fy) + " %{x}</b><br>" + metric + ": %{y}<extra></extra>"))
+    style_fig(fig_yoy, 380)
+    fig_yoy.update_layout(
+        barmode='group', bargap=0.25, bargroupgap=0.06,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    font=dict(size=12), bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(type='category', gridcolor="#E8ECF0", linecolor=MIDGRAY))
+    st.plotly_chart(fig_yoy, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    vol_rows = []
-    for region, affs in REGIONS:
-        for aff in affs:
-            v = VOLUNTEER_DATA.get(aff, [])
-            count = sum(v[i] for i in selected_idxs3 if i < len(v))
-            vol_rows.append({'Region':region,'Affiliate':aff,'Count':count})
-    vol_sorted = pd.DataFrame(vol_rows).sort_values('Count',ascending=False)
-    vol_sorted = vol_sorted[vol_sorted['Count']>0]
+    # ── 3. Yield trend ────────────────────────────────────────────────────────
+    st.markdown("<div class='sec-head'>🎯 3. Yield — Volunteers Sworn In per 100 Inquiries</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
+    st.markdown(f"""<div class='note-box'>
+        💡 <strong>What this tells you:</strong> Each point is volunteers sworn in that quarter divided by inquiries
+        <strong>{LAG} quarters earlier</strong> — roughly the same people, allowing for application, training and
+        swearing-in. A rising line means the pipeline is converting interest better.
+        <strong>This is not a true conversion rate:</strong> many volunteers are recruited by affiliates directly and
+        never appear in the inquiry form, so the figure can exceed 100. Read the direction, not the level.
+    </div>""", unsafe_allow_html=True)
 
-    fig_aff = go.Figure(go.Bar(
-        x=vol_sorted['Count'], y=vol_sorted['Affiliate'], orientation='h',
-        marker_color=[RED if i==0 else DKBLUE if i==1 else LTBLUE for i in range(len(vol_sorted))],
-        text=vol_sorted['Count'], textposition='outside',
-        customdata=vol_sorted['Region'],
-        hovertemplate="<b>%{y}</b><br>Region: %{customdata}<br>Sworn In: %{x}<extra></extra>"
-    ))
-    style_fig(fig_aff, max(300, len(vol_sorted)*20))
-    fig_aff.update_layout(yaxis=dict(autorange='reversed',gridcolor="rgba(0,0,0,0)",tickfont=dict(size=10)),
-        showlegend=False, margin=dict(l=10,r=50,t=20,b=10))
-    st.plotly_chart(fig_aff, use_container_width=True)
+    yv = [(r.label, yield_for(r.fy, r.q)) for r in qdf.itertuples()]
+    yv = [(l, v) for l, v in yv if v is not None]
+    if len(yv) >= 2:
+        fig_y = go.Figure(go.Scatter(
+            x=[l for l, _ in yv], y=[v for _, v in yv],
+            mode='lines+markers+text', line=dict(color=DKBLUE, width=2.5),
+            marker=dict(color=DKBLUE, size=8),
+            text=[v for _, v in yv], textposition='top center',
+            textfont=dict(size=10, color=DKBLUE),
+            hovertemplate="<b>%{x}</b><br>%{y} sworn in per 100 inquiries<extra></extra>"))
+        avg = round(sum(v for _, v in yv) / len(yv))
+        fig_y.add_hline(y=avg, line=dict(color=MIDGRAY, width=1, dash='dash'),
+                        annotation_text=f"average {avg}", annotation_position="right",
+                        annotation_font=dict(size=10, color="#667085"))
+        style_fig(fig_y, 320)
+        fig_y.update_layout(xaxis=dict(type='category', gridcolor="#E8ECF0"),
+                            yaxis=dict(gridcolor="#E8ECF0", rangemode='tozero'),
+                            showlegend=False)
+        st.plotly_chart(fig_y, use_container_width=True)
+    else:
+        st.info(f"Need at least {LAG + 2} consecutive quarters of both datasets to plot a yield trend.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── 4. The numbers ────────────────────────────────────────────────────────
+    st.markdown("<div class='sec-head'>📋 4. Quarter-by-Quarter Detail</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
+    tbl = []
+    for r in qdf.itertuples():
+        py = qlook.get((r.fy - 1, r.q))
+        iy = pct(r.inq, py.inq if py else None)
+        sy = pct(r.sworn, py.sworn if py and py.sworn is not None and r.sworn is not None else None)
+        tbl.append({
+            'Quarter':   r.label,
+            'Period':    r.period,
+            'Inquiries': f"{r.inq}" + ("" if r.complete else f" ({r.missing} missing)"),
+            'Inq. YoY':  "—" if iy is None else f"{iy:+d}%",
+            'Sworn In':  "—" if r.sworn is None else f"{int(r.sworn)}",
+            'Sworn YoY': "—" if sy is None else f"{sy:+d}%",
+            'Yield /100': "—" if yield_for(r.fy, r.q) is None else f"{yield_for(r.fy, r.q)}",
+        })
+    st.dataframe(pd.DataFrame(tbl), use_container_width=True, hide_index=True, height=420)
     st.markdown("</div>", unsafe_allow_html=True)
