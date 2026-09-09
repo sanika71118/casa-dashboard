@@ -585,17 +585,22 @@ if page == "Page 1 — Inquiries":
             showlegend=False, margin=dict(l=10,r=30,t=40,b=10))
         st.plotly_chart(fig_aff, use_container_width=True)
 
-    with st.expander("🔍 Full County Breakdown Table"):
+    if st.checkbox("🔍 Full county breakdown — click an affiliate to see its counties",
+                   key="p1_breakdown"):
         ct = (filtered[filtered['Affiliate'] != 'No County Selected']
               .groupby(['Affiliate', 'County']).size().reset_index(name='Inquiries'))
-        ct['_tot'] = ct.groupby('Affiliate')['Inquiries'].transform('sum')
-        ct = (ct.sort_values(['_tot', 'Affiliate', 'Inquiries', 'County'],
-                             ascending=[False, True, False, True])
-                .drop(columns='_tot')[['Affiliate', 'County', 'Inquiries']]
-                .reset_index(drop=True))
-        ct.index += 1
-        st.dataframe(ct.style.bar(subset=['Inquiries'], color=RED + "88"),
-                     use_container_width=True, height=600)
+        aff_tot = ct.groupby('Affiliate')['Inquiries'].sum().sort_values(ascending=False)
+
+        for aff, tot in aff_tot.items():
+            sub = (ct[ct['Affiliate'] == aff][['County', 'Inquiries']]
+                   .sort_values('Inquiries', ascending=False)
+                   .reset_index(drop=True))
+            sub.index += 1
+            label = f"{aff}  —  {tot} inquiries  ·  {len(sub)} count{'y' if len(sub)==1 else 'ies'}"
+            with st.expander(label):
+                st.dataframe(sub.style.bar(subset=['Inquiries'], color=RED + "88"),
+                             use_container_width=True,
+                             height=min(35 * len(sub) + 40, 420))
 
     
 # ══════════════════════════════════════════════════════════════════════════════
