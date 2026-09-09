@@ -702,12 +702,12 @@ elif page == "Page 2 — Volunteer Map":
 
         if view == "Top 10":
             rows = allv[:10]
-            colors = [RED if i == 0 else LTBLUE for i in range(len(rows))]
             title = "Top 10 affiliates — most sworn in"
         else:
             rows = sorted(allv, key=lambda x: x[1])[:10][::-1]
-            colors = [GOLD] * len(rows)
             title = "Bottom 10 affiliates — fewest sworn in"
+
+        colors = [RED if i == 0 else LTBLUE for i in range(len(rows))]
 
         rdf = pd.DataFrame(rows, columns=['Affiliate', 'Sworn In'])
         fig_rank = go.Figure(go.Bar(
