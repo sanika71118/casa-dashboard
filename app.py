@@ -585,10 +585,9 @@ if page == "Page 1 — Inquiries":
             showlegend=False, margin=dict(l=10,r=30,t=40,b=10))
         st.plotly_chart(fig_aff, use_container_width=True)
 
-        with st.expander("🔍 Full County Breakdown Table"):
+    with st.expander("🔍 Full County Breakdown Table"):
         ct = (filtered[filtered['Affiliate'] != 'No County Selected']
               .groupby(['Affiliate', 'County']).size().reset_index(name='Inquiries'))
-        # order: biggest affiliate first, then biggest county within it
         ct['_tot'] = ct.groupby('Affiliate')['Inquiries'].transform('sum')
         ct = (ct.sort_values(['_tot', 'Affiliate', 'Inquiries', 'County'],
                              ascending=[False, True, False, True])
@@ -598,7 +597,7 @@ if page == "Page 1 — Inquiries":
         st.dataframe(ct.style.bar(subset=['Inquiries'], color=RED + "88"),
                      use_container_width=True, height=600)
 
-
+    
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 2 — VOLUNTEER MAP
 # ══════════════════════════════════════════════════════════════════════════════
