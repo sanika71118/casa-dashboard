@@ -56,109 +56,7 @@ footer,#MainMenu,header {{visibility:hidden}}
 """, unsafe_allow_html=True)
 
 # ── MAPPINGS ──────────────────────────────────────────────────────────────────
-COUNTY_TO_AFF = {
-    'Bibb':'Ocmulgee','Monroe':'Ocmulgee','Jones':'Ocmulgee','Twiggs':'Ocmulgee','Wilkinson':'Ocmulgee',
-    'Baldwin':'Central Ga','Putnam':'Central Ga','Jasper':'Central Ga','Johnson':'Central Ga',
-    'Butts':'Towaliga','Lamar':'Towaliga','Upson':'Towaliga','Pike':'Towaliga',
-    'Houston':'Houston','Peach':'Houston','Crawford':'Houston','Taylor':'Houston',
-    'Spalding':'TLC','Schley':'TLC',
-    'Troup':'Troup','Meriwether':'Troup','Heard':'Troup',
-    'Coweta':'Coweta','Carroll':'Carroll',
-    'Fulton':'Atlanta','Henry':'Henry','Fayette':'Henry','Clayton':'Clayton',
-    'DeKalb':'DeKalb','Gwinnett':'Gwinnett','Cobb':'Cobb','Douglas':'Cobb',
-    'Rockdale':'Rockdale','Forsyth':'Forsyth',
-    'Newton':'Alcovy','Walton':'Alcovy','Barrow':'Alcovy','Morgan':'Alcovy',
-    'Paulding':'Paulding','Cherokee':'Cherokee','Pickens':'Cherokee','Bartow':'Cherokee',
-    'Hall':'Hall-Dawson','Dawson':'Hall-Dawson','Lumpkin':'Hall-Dawson',
-    'Habersham':'Mountain','Stephens':'Mountain','Rabun':'Mountain','Towns':'Mountain',
-    'White':'Mountain','Union':'Mountain','Gilmer':'Mountain',
-    'Banks':'NE CASA','Franklin':'NE CASA','Hart':'NE CASA','Madison':'NE CASA',
-    'Elbert':'NE CASA','Jackson':'NE CASA',
-    'Clarke':'Athens','Oconee':'Athens','Oglethorpe':'Athens','Greene':'Athens',
-    'Wilkes':'Athens','Lincoln':'Athens','Columbia':'Athens',
-    'Haralson':'Polk & Haralson','Polk':'Polk & Haralson',
-    'Floyd':'Floyd','Gordon':'NW GA','Chattooga':'NW GA',
-    'Murray':'Murray/Whitfield','Whitfield':'Murray/Whitfield',
-    'Walker':'Lookout Mountain','Catoosa':'Lookout Mountain','Dade':'Lookout Mountain',
-    'Liberty':'Atlantic Area','Long':'Atlantic Area','McIntosh':'Atlantic Area',
-    'Glynn':'Glynn','Camden':'Glynn','Brantley':'Glynn',
-    'Richmond':'Augusta','Burke':'Augusta','McDuffie':'Augusta','Warren':'Augusta','Screven':'Augusta',
-    'Bulloch':'Ogeechee','Candler':'Ogeechee','Evans':'Ogeechee',
-    'Tattnall':'Ogeechee','Tatnall':'Ogeechee','Emanuel':'Ogeechee','Jenkins':'Ogeechee',
-    'Chatham':'Savannah','Bryan':'Savannah','Effingham':'Savannah',
-    'Appling':'SE CASA','Wayne':'SE CASA','Pierce':'SE CASA','Jeff Davis':'SE CASA',
-    'Coffee':'SE CASA','Bacon':'SE CASA','Toombs':'SE CASA','Montgomery':'SE CASA',
-    'Lowndes':'Lowndes & Echols','Echols':'Lowndes & Echols','Lanier':'Lowndes & Echols','Brooks':'Lowndes & Echols',
-    'Thomas':'CASA SW','Decatur':'CASA SW','Grady':'CASA SW','Mitchell':'CASA SW','Seminole':'CASA SW',
-    'Colquitt':'SOWEGA','Worth':'SOWEGA','Tift':'SOWEGA','Turner':'SOWEGA',
-    'Ben  Hill':'SOWEGA','Irwin':'SOWEGA','Berrien':'SOWEGA','Cook':'SOWEGA',
-    'Muscogee':'Chattahoochee','Harris':'Chattahoochee','Chattahoochee':'Chattahoochee',
-    'Marion':'Chattahoochee','Webster':'Chattahoochee','Stewart':'Chattahoochee',
-    'Dooly':'CASA Kids','Crisp':'CASA Kids','Wilcox':'CASA Kids','Pulaski':'CASA Kids',
-    'Bleckley':'CASA Kids','Dodge':'CASA Kids','Laurens':'CASA Kids',
-    'Telfair':'CASA Kids','Wheeler':'CASA Kids','Treutlen':'CASA Kids',
-    'Atkinson':'Alapaha',
-    'Ware':'Coastal Plain','Charlton':'Coastal Plain','Clinch':'Coastal Plain',
-    'Dougherty':'Dougherty','Lee':'Dougherty','Terrell':'Dougherty','Calhoun':'Dougherty',
-    'Baker':'Dougherty','Miller':'Dougherty','Early':'Dougherty','Clay':'Dougherty',
-    'Randolph':'Dougherty','Quitman':'Dougherty',
-}
-
-REGIONS = [
-    ('Central', ['Advo-Kids','Ocmulgee','Central Ga','Towaliga','Houston','TLC','Troup','Coweta']),
-    ('Metro',   ['Atlanta','Henry',"Children's Voice",'Clayton','DeKalb','Gwinnett','Cobb','Rockdale','Forsyth','Alcovy']),
-    ('NE',      ['Piedmont','Athens','Enotah','Hall-Dawson','NE CASA','Mountain']),
-    ('NW',      ['NW GA','Cherokee','Paulding','Appalachian','Floyd','Polk & Haralson','Murray/Whitfield','Lookout Mountain']),
-    ('Coastal', ['Atlantic Area','Glynn','Augusta','Ogeechee','Savannah','SE CASA']),
-    ('South',   ['Lowndes & Echols','CASA SW','SOWEGA','Chattahoochee','CASA Kids','Alapaha','Coastal Plain','Dougherty']),
-]
-
-COUNTY_COORDS = {
-    'Fulton':(33.749,-84.388),'DeKalb':(33.775,-84.232),'Cobb':(33.938,-84.578),
-    'Gwinnett':(33.962,-84.002),'Clayton':(33.557,-84.359),'Henry':(33.448,-84.152),
-    'Fayette':(33.412,-84.470),'Douglas':(33.698,-84.755),'Newton':(33.553,-83.847),
-    'Rockdale':(33.657,-84.021),'Coweta':(33.357,-84.760),'Carroll':(33.581,-85.078),
-    'Paulding':(33.927,-84.864),'Forsyth':(34.226,-84.133),'Cherokee':(34.239,-84.479),
-    'Barrow':(33.998,-83.720),'Jackson':(34.138,-83.562),'Hall':(34.311,-83.818),
-    'Clarke':(33.961,-83.377),'Oconee':(33.842,-83.433),'Baldwin':(33.073,-83.250),
-    'Bibb':(32.838,-83.694),'Houston':(32.465,-83.652),'Chatham':(32.028,-81.107),
-    'Muscogee':(32.460,-84.988),'Richmond':(33.374,-82.076),'Columbia':(33.537,-82.196),
-    'Lowndes':(30.832,-83.279),'Dougherty':(31.535,-84.169),'Glynn':(31.221,-81.517),
-    'Bulloch':(32.409,-81.775),'Liberty':(31.837,-81.455),'Bryan':(31.993,-81.433),
-    'Effingham':(32.375,-81.336),'Bartow':(34.238,-84.839),'Floyd':(34.262,-85.214),
-    'Walker':(34.743,-85.300),'Catoosa':(34.903,-85.120),'Whitfield':(34.797,-84.977),
-    'Murray':(34.789,-84.745),'Dawson':(34.451,-84.165),'Gilmer':(34.691,-84.468),
-    'Pickens':(34.469,-84.471),'Troup':(33.037,-85.030),'Meriwether':(32.952,-84.681),
-    'Harris':(32.734,-84.904),'Spalding':(33.268,-84.289),'Monroe':(33.013,-83.918),
-    'Morgan':(33.591,-83.494),'Walton':(33.782,-83.730),'Greene':(33.575,-83.159),
-    'Oglethorpe':(33.868,-83.089),'Madison':(34.109,-83.211),'Elbert':(34.115,-82.849),
-    'Hart':(34.353,-82.969),'Franklin':(34.377,-83.234),'Habersham':(34.629,-83.532),
-    'Stephens':(34.566,-83.294),'White':(34.647,-83.734),'Lumpkin':(34.568,-83.973),
-    'Fannin':(34.870,-84.321),'Towns':(34.922,-83.729),'Rabun':(34.891,-83.401),
-    'Camden':(30.893,-81.616),'Ware':(31.063,-82.415),'Coffee':(31.550,-82.845),
-    'Appling':(31.748,-82.309),'Pierce':(31.358,-82.207),'Wayne':(31.554,-81.913),
-    'Brantley':(31.196,-81.983),'Charlton':(30.788,-82.138),'Clinch':(30.913,-82.700),
-    'Atkinson':(31.295,-82.882),'Berrien':(31.272,-83.233),'Cook':(31.151,-83.428),
-    'Tift':(31.462,-83.523),'Turner':(31.716,-83.628),'Wilcox':(31.968,-83.428),
-    'Crisp':(31.897,-83.776),'Dooly':(32.169,-83.777),'Pulaski':(32.236,-83.470),
-    'Bleckley':(32.423,-83.322),'Dodge':(32.171,-83.184),'Laurens':(32.461,-82.913),
-    'Toombs':(32.120,-82.334),'Emanuel':(32.581,-82.298),'Candler':(32.404,-82.076),
-    'Evans':(32.169,-81.883),'Tattnall':(32.045,-82.061),'Tatnall':(32.045,-82.061),
-    'Treutlen':(32.403,-82.569),'Montgomery':(32.172,-82.531),'Jeff Davis':(31.806,-82.634),
-    'Telfair':(31.900,-82.941),'Burke':(33.073,-81.979),'Screven':(32.743,-81.605),
-    'McDuffie':(33.475,-82.477),'Lincoln':(33.789,-82.467),
-    'Lee':(31.778,-84.141),'Decatur':(30.868,-84.578),'Grady':(30.874,-84.229),
-    'Thomas':(30.855,-83.929),'Brooks':(30.835,-83.569),'Lanier':(31.036,-83.062),
-    'Echols':(30.707,-82.900),'Colquitt':(31.177,-83.760),'Mitchell':(31.219,-84.187),
-    'Calhoun':(31.535,-84.618),'Baker':(31.328,-84.449),'Miller':(31.167,-84.733),
-    'Early':(31.327,-84.902),'Clay':(31.628,-85.001),'Randolph':(31.777,-84.751),
-    'Quitman':(31.867,-85.019),'Webster':(32.044,-84.560),'Stewart':(32.077,-84.834),
-    'Schley':(32.261,-84.310),'Macon':(32.355,-84.041),'Marion':(32.362,-84.527),
-    'Talbot':(32.697,-84.535),'Chattahoochee':(32.354,-84.787),
-    'Harris':(32.734,-84.904),'Haralson':(33.796,-85.212),'Polk':(34.002,-85.173),
-    'Gordon':(34.503,-84.877),'Chattooga':(34.477,-85.354),'Dade':(34.858,-85.489),
-    'Seminole':(30.941,-84.874),'Worth':(31.566,-83.853),
-}
+from casa_mappings import COUNTY_TO_AFF, REGIONS, COUNTY_COORDS, GA_COUNTY_FIPS
 
 # ── VOLUNTEER DATA — loaded from Excel file in /data ─────────────────────────
 # Name your sworn-in file: volunteers_sworn_in.xlsx and drop it in /data
@@ -234,7 +132,30 @@ if not VOLUNTEER_DATA:
     VOL_QTR_COLS  = ['FY 2025 - 1st Qtr','FY 2025 - 2nd Qtr','FY 2025 - 3rd Qtr',
                      'FY 2025 - 4th Qtr','FY 2026 - 1st Qtr','FY 2026 - 2nd Qtr','FY 2026 - 3rd Qtr']
     VOL_QTR_LABELS = ['FY25 Q1','FY25 Q2','FY25 Q3','FY25 Q4','FY26 Q1','FY26 Q2','FY26 Q3']
+# ── Reconcile sworn-in affiliate names with the CAPTA affiliate names ─────────
+AFF_ALIAS = {
+    'Atlantic':       'Atlantic Area',
+    'Central Ga':     'Central Georgia',
+    'Cherokee':       'Cherokee CASA',
+    'Dekalb':         'DeKalb',
+    'Lookout':        'Lookout Mt.',
+    'Lowndes':        'Lowndes & Echols',
+    'Murray/Whit':    'Murray/Whitfield',
+    'Northeast':      'Northeast Georgia',
+    'Northwest':      'Northwest Ga',
+    'Polk /Haralson': 'Polk/Haralson',
+    'Savannah':       'Savannah-Chatham',
+    'SW Georgia':     'Southwest Georgia',
+}
+VOLUNTEER_DATA = {
+    AFF_ALIAS.get(k.replace('*', '').strip(), k.replace('*', '').strip()): v
+    for k, v in VOLUNTEER_DATA.items()
+}
 
+_known = set(COUNTY_TO_AFF.values())
+_unmatched = sorted(set(VOLUNTEER_DATA) - _known)
+if _unmatched:
+    st.sidebar.warning("Sworn-in affiliates not recognised: " + ", ".join(_unmatched))
 @st.cache_data
 def load_ga_geojson():
     import urllib.request, json
@@ -732,41 +653,7 @@ elif page == "Page 2 — Volunteer Map":
         This helps leadership quickly spot which parts of Georgia are growing their volunteer base.
     </div>""", unsafe_allow_html=True)
 
-    GA_COUNTY_FIPS = {
-        'Appling':'13001','Atkinson':'13003','Bacon':'13005','Baker':'13007','Baldwin':'13009',
-        'Banks':'13011','Barrow':'13013','Bartow':'13015','Ben Hill':'13017','Berrien':'13019',
-        'Bibb':'13021','Bleckley':'13023','Brantley':'13025','Brooks':'13027','Bryan':'13029',
-        'Bulloch':'13031','Burke':'13033','Butts':'13035','Calhoun':'13037','Camden':'13039',
-        'Candler':'13043','Carroll':'13045','Catoosa':'13047','Charlton':'13049','Chatham':'13051',
-        'Chattahoochee':'13053','Chattooga':'13055','Cherokee':'13057','Clarke':'13059','Clay':'13061',
-        'Clayton':'13063','Clinch':'13065','Cobb':'13067','Coffee':'13069','Colquitt':'13071',
-        'Columbia':'13073','Cook':'13075','Coweta':'13077','Crawford':'13079','Crisp':'13081',
-        'Dade':'13083','Dawson':'13085','Decatur':'13087','DeKalb':'13089','Dodge':'13091',
-        'Dooly':'13093','Dougherty':'13095','Douglas':'13097','Early':'13099','Echols':'13101',
-        'Effingham':'13103','Elbert':'13105','Emanuel':'13107','Evans':'13109','Fannin':'13111',
-        'Fayette':'13113','Floyd':'13115','Forsyth':'13117','Franklin':'13119','Fulton':'13121',
-        'Gilmer':'13123','Glascock':'13125','Glynn':'13127','Gordon':'13129','Grady':'13131',
-        'Greene':'13133','Gwinnett':'13135','Habersham':'13137','Hall':'13139','Hancock':'13141',
-        'Haralson':'13143','Harris':'13145','Hart':'13147','Heard':'13149','Henry':'13151',
-        'Houston':'13153','Irwin':'13155','Jackson':'13157','Jasper':'13159','Jeff Davis':'13161',
-        'Jefferson':'13163','Jenkins':'13165','Johnson':'13167','Jones':'13169','Lamar':'13171',
-        'Lanier':'13173','Laurens':'13175','Lee':'13177','Liberty':'13179','Lincoln':'13181',
-        'Long':'13183','Lowndes':'13185','Lumpkin':'13187','Macon':'13193','Madison':'13195',
-        'Marion':'13197','McDuffie':'13189','McIntosh':'13191','Meriwether':'13199','Miller':'13201',
-        'Mitchell':'13205','Monroe':'13207','Montgomery':'13209','Morgan':'13211','Murray':'13213',
-        'Muscogee':'13215','Newton':'13217','Oconee':'13219','Oglethorpe':'13221','Paulding':'13223',
-        'Peach':'13225','Pickens':'13227','Pierce':'13229','Pike':'13231','Polk':'13233',
-        'Pulaski':'13235','Putnam':'13237','Quitman':'13239','Rabun':'13241','Randolph':'13243',
-        'Richmond':'13245','Rockdale':'13247','Schley':'13249','Screven':'13251','Seminole':'13253',
-        'Spalding':'13255','Stephens':'13257','Stewart':'13259','Sumter':'13261','Talbot':'13263',
-        'Taliaferro':'13265','Tattnall':'13267','Taylor':'13269','Telfair':'13271','Terrell':'13273',
-        'Thomas':'13275','Tift':'13277','Toombs':'13279','Towns':'13281','Treutlen':'13283',
-        'Troup':'13285','Turner':'13287','Twiggs':'13289','Union':'13291','Upson':'13293',
-        'Walker':'13295','Walton':'13297','Ware':'13299','Warren':'13301','Washington':'13303',
-        'Wayne':'13305','Webster':'13307','Wheeler':'13309','White':'13311','Whitfield':'13313',
-        'Wilcox':'13315','Wilkes':'13317','Wilkinson':'13319','Worth':'13321',
-    }
-
+    
     county_rows = []
     for county, fips in GA_COUNTY_FIPS.items():
         aff = COUNTY_TO_AFF.get(county)
