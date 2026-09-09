@@ -25,6 +25,12 @@ CHART_COLORS = [RED, DKBLUE, LTBLUE, "#E84B61", "#3A6EA8", "#8B1A2C",
                 "#1A3A5C", GOLD, "#2ECC71", "#9B59B6", "#E67E22",
                 "#1ABC9C", "#16A085", "#8E44AD", "#D35400"]
 
+# ── SOURCE RANK PALETTE ───────────────────────────────────────────────────────
+# Top 5 sources each get a distinct hue; the remainder shares one gray.
+# The same map drives the donut and the bar, so a color = one specific source.
+TOP5_COLORS = [RED, DKBLUE, GOLD, LTBLUE, "#00857C"]
+TAIL_COLOR  = "#AEB7C4"
+
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
@@ -523,50 +529,91 @@ if page == "Page 1 — Inquiries":
     st.plotly_chart(fig1, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Chart 2: Source
+            # Chart 2: Source
     st.markdown("<div class='sec-head'>📢 2. Inquiries by Source</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
+
     src_counts = filtered['Source'].value_counts().reset_index()
-    src_counts.columns = ['Source','Count']
-    top_src_name = src_counts.iloc[0]['Source'] if not src_counts.empty else "—"
-    top_src_pct  = round(src_counts.iloc[0]['Count'] / src_counts['Count'].sum() * 100) if not src_counts.empty else 0
+    src_counts.columns = ['Source', 'Count']
+
+    # ── Build ONE top-5 table + shared color map used by both charts ──────────
+    top5       = src_counts.head(5)[['Source', 'Count']].copy()
+    tail_count = int(src_counts.iloc[5:]['Count'].sum())
+
+    plot_df = top5
+    if tail_count > 0:
+        plot_df = pd.concat(
+            [top5, pd.DataFrame([{'Source': 'All other sources', 'Count': tail_count}])],
+            ignore_index=True)
+
+    SRC_COLOR = {s: TOP5_COLORS[i] for i, s in enumerate(top5['Source'])}
+    SRC_COLOR['All other sources'] = TAIL_COLOR
+    plot_colors = [SRC_COLOR[s] for s in plot_df['Source']]
+
+    total_src    = int(src_counts['Count'].sum())
+    top_src_name = src_counts.iloc[0]['Source']
+    top_src_pct  = round(src_counts.iloc[0]['Count'] / total_src * 100)
     second_src   = src_counts.iloc[1]['Source'] if len(src_counts) > 1 else "—"
+    top5_pct     = round(top5['Count'].sum() / total_src * 100)
+    n_other      = len(src_counts) - 5
+
     st.markdown(f"""<div class='note-box'>
-        💡 <strong>What this tells you:</strong> Most people who inquire about volunteering hear about CASA through
-        <strong>{top_src_name}</strong> ({top_src_pct}% of all inquiries). <strong>{second_src}</strong> is the second
-        biggest channel. This helps CASA focus marketing — invest more in what is already driving the most interest.
+        💡 <strong>What this tells you:</strong> Most people who inquire about volunteering hear about CASA
+        through <strong>{top_src_name}</strong> ({top_src_pct}% of all inquiries), with
+        <strong>{second_src}</strong> second. These top 5 channels drive <strong>{top5_pct}%</strong> of all
+        interest — the remaining {n_other} sources are grouped in gray. This helps CASA focus marketing:
+        invest more in what is already driving the most interest. Open the table below for the full list.
     </div>""", unsafe_allow_html=True)
-    c2a,c2b = st.columns(2)
+
+    c2a, c2b = st.columns(2)
+
     with c2a:
-        top8 = src_counts.head(8).copy()
-        other_count = src_counts.iloc[8:]['Count'].sum()
-        if other_count > 0:
-            top8 = pd.concat([top8, pd.DataFrame([{'Source':'Other sources','Count':other_count}])], ignore_index=True)
-        fig2a = px.pie(top8, values='Count', names='Source',
-                       color_discrete_sequence=CHART_COLORS, hole=0.45)
+        fig2a = px.pie(plot_df, values='Count', names='Source', hole=0.55,
+                       color='Source', color_discrete_map=SRC_COLOR,
+                       category_orders={'Source': list(plot_df['Source'])})
         fig2a.update_traces(
-            textposition='inside', textinfo='percent',
-            hovertemplate="<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>",
-            insidetextorientation='radial')
+            sort=False,
+            textposition='inside', insidetextorientation='horizontal',
+            texttemplate="<b>%{percent}</b>",
+            marker=dict(line=dict(color=WHITE, width=2)),
+            hovertemplate="<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>")
+        fig2a.add_annotation(
+            text=f"<b>{total_src:,}</b><br><span style='font-size:11px'>inquiries</span>",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=22, color=DKBLUE, family="Arial"))
         fig2a.update_layout(
-            height=380, paper_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=10,r=10,t=30,b=10),
-            legend=dict(orientation="v",x=1.01,y=0.5,xanchor="left",
-                        font=dict(size=10),bgcolor="rgba(0,0,0,0)"),
+            height=360, paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=10, r=10, t=20, b=10),
+            legend=dict(orientation="v", x=1.01, y=0.5, xanchor="left",
+                        font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
             showlegend=True,
-            font=dict(family="Arial,sans-serif",color=DKBLUE))
+            font=dict(family="Arial,sans-serif", color=DKBLUE))
         st.plotly_chart(fig2a, use_container_width=True)
+
     with c2b:
-        fig2b = go.Figure(go.Bar(x=src_counts['Count'], y=src_counts['Source'], orientation='h',
-            marker_color=[RED if i==0 else DKBLUE if i==1 else LTBLUE for i in range(len(src_counts))],
-            text=src_counts['Count'], textposition='outside',
+        fig2b = go.Figure(go.Bar(
+            x=plot_df['Count'], y=plot_df['Source'], orientation='h',
+            marker_color=plot_colors,
+            text=plot_df['Count'], textposition='outside', cliponaxis=False,
+            textfont=dict(size=12, color=DKBLUE, family="Arial Black"),
             hovertemplate="<b>%{y}</b><br>Count: %{x}<extra></extra>"))
-        style_fig(fig2b, 420)
+        style_fig(fig2b, 360)
         fig2b.update_layout(
-            yaxis=dict(autorange='reversed',gridcolor="rgba(0,0,0,0)",tickfont=dict(size=10)),
+            bargap=0.35,
+            yaxis=dict(autorange='reversed', gridcolor="rgba(0,0,0,0)",
+                       tickfont=dict(size=12)),
             xaxis=dict(gridcolor="#E8ECF0"),
-            showlegend=False, margin=dict(l=20,r=60,t=20,b=20))
+            showlegend=False,
+            margin=dict(l=20, r=70, t=30, b=20))
         st.plotly_chart(fig2b, use_container_width=True)
+
+    with st.expander("🔍 All sources — full breakdown"):
+        full = src_counts.copy()
+        full['% of total'] = (full['Count'] / total_src * 100).round(1).astype(str) + '%'
+        full.index = range(1, len(full) + 1)
+        st.dataframe(full.style.bar(subset=['Count'], color=RED + "88"),
+                     use_container_width=True, height=300)
+
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Chart 3: County map
