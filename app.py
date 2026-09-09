@@ -733,7 +733,7 @@ elif page == "Page 2 — Volunteer Map":
             colors = [RED] * len(rows)
             title = "Bottom 10 affiliates — fewest sworn in · needs attention"
 
-        colors = [RED if i == 0 else LTBLUE for i in range(len(rows))]
+        
 
         rdf = pd.DataFrame(rows, columns=['Affiliate', 'Sworn In'])
         fig_rank = go.Figure(go.Bar(
