@@ -695,18 +695,20 @@ elif page == "Page 2 — Volunteer Map":
         else:
             st.info("Map unavailable — could not load county boundaries. The ranked list on the right still shows all data.")
     with c2b:
-        ranked = sorted([(aff, get_vol(aff)) for aff in VOLUNTEER_DATA], key=lambda x:-x[1])
-        ranked = [(a,v) for a,v in ranked if v > 0]
-        rdf = pd.DataFrame(ranked, columns=['Affiliate','Sworn In'])
-        fig_rank = go.Figure(go.Bar(x=rdf['Sworn In'], y=rdf['Affiliate'], orientation='h',
-            marker_color=[RED if i==0 else DKBLUE if i==1 else LTBLUE for i in range(len(rdf))],
-            text=rdf['Sworn In'], textposition='outside',
+        ranked = sorted([(aff, get_vol(aff)) for aff in VOLUNTEER_DATA], key=lambda x: -x[1])
+        ranked = [(a, v) for a, v in ranked if v > 0]
+        rdf = pd.DataFrame(ranked, columns=['Affiliate', 'Sworn In'])
+        fig_rank = go.Figure(go.Bar(
+            x=rdf['Sworn In'], y=rdf['Affiliate'], orientation='h',
+            marker_color=[RED if i == 0 else LTBLUE for i in range(len(rdf))],
+            text=rdf['Sworn In'], textposition='outside', cliponaxis=False,
             hovertemplate="<b>%{y}</b><br>Sworn in: %{x}<extra></extra>"))
-        style_fig(fig_rank, 430)
-        fig_rank.update_layout(yaxis=dict(autorange='reversed',gridcolor="rgba(0,0,0,0)",tickfont=dict(size=9)),
-            showlegend=False, margin=dict(l=10,r=30,t=20,b=10))
+        style_fig(fig_rank, max(430, len(rdf) * 22))
+        fig_rank.update_layout(
+            yaxis=dict(autorange='reversed', gridcolor="rgba(0,0,0,0)",
+                       tickmode='linear', tickfont=dict(size=10)),
+            showlegend=False, margin=dict(l=10, r=50, t=20, b=10))
         st.plotly_chart(fig_rank, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
     # Region breakdown table
     st.markdown("<div class='sec-head'>📊 Volunteers by Region — Detailed Breakdown</div>", unsafe_allow_html=True)
