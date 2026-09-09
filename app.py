@@ -574,16 +574,40 @@ if page == "Page 1 — Inquiries":
                         title=dict(text="Affiliate",font=dict(size=10))))
         st.plotly_chart(fig_map, use_container_width=True)
     with c3b:
-        aff_counts = filtered[~filtered['Affiliate'].isin(['No County Selected','Other'])]['Affiliate'].value_counts().head(15).reset_index()
-        aff_counts.columns = ['Affiliate','Count']
-        fig_aff = go.Figure(go.Bar(x=aff_counts['Count'], y=aff_counts['Affiliate'], orientation='h',
-            marker_color=RED, text=aff_counts['Count'], textposition='outside',
+        view3 = st.radio("Show", ["Top 10", "Bottom 10"], horizontal=True,
+                         key="p1_aff_view", label_visibility="collapsed")
+
+        counts = (filtered[~filtered['Affiliate'].isin(['No County Selected', 'Other'])]
+                  ['Affiliate'].value_counts())
+        # include affiliates with zero inquiries — they matter most in Bottom 10
+        counts = counts.reindex(sorted(set(COUNTY_TO_AFF.values())), fill_value=0)
+
+        if view3 == "Top 10":
+            sel = counts.sort_values(ascending=False).head(10)
+            colors3 = [LTBLUE] * len(sel)
+            title3 = "Top 10 affiliates — most inquiries"
+        else:
+            sel = counts.sort_values(ascending=True).head(10).iloc[::-1]
+            colors3 = [RED] * len(sel)
+            title3 = "Bottom 10 affiliates — fewest inquiries · needs attention"
+
+        aff_counts = sel.reset_index()
+        aff_counts.columns = ['Affiliate', 'Count']
+        fig_aff = go.Figure(go.Bar(
+            x=aff_counts['Count'], y=aff_counts['Affiliate'], orientation='h',
+            marker_color=colors3,
+            text=aff_counts['Count'], textposition='outside', cliponaxis=False,
+            textfont=dict(size=11, color=DKBLUE),
             hovertemplate="<b>%{y}</b><br>Inquiries: %{x}<extra></extra>"))
-        style_fig(fig_aff, 420)
-        fig_aff.update_layout(title=dict(text="Top Affiliates",font=dict(color=DKBLUE,size=12)),
-            yaxis=dict(autorange='reversed',gridcolor="rgba(0,0,0,0)",tickfont=dict(size=10)),
-            showlegend=False, margin=dict(l=10,r=30,t=40,b=10))
+        style_fig(fig_aff, 380)
+        fig_aff.update_layout(
+            title=dict(text=title3, font=dict(color=DKBLUE, size=12)),
+            bargap=0.3,
+            yaxis=dict(autorange='reversed', gridcolor="rgba(0,0,0,0)",
+                       tickmode='linear', tickfont=dict(size=11)),
+            showlegend=False, margin=dict(l=10, r=55, t=35, b=10))
         st.plotly_chart(fig_aff, use_container_width=True)
+        
 
     if st.checkbox("🔍 Full county breakdown — click an affiliate to see its counties",
                    key="p1_breakdown"):
@@ -702,10 +726,12 @@ elif page == "Page 2 — Volunteer Map":
 
         if view == "Top 10":
             rows = allv[:10]
+            colors = [LTBLUE] * len(rows)
             title = "Top 10 affiliates — most sworn in"
         else:
             rows = sorted(allv, key=lambda x: x[1])[:10][::-1]
-            title = "Bottom 10 affiliates — fewest sworn in"
+            colors = [RED] * len(rows)
+            title = "Bottom 10 affiliates — fewest sworn in · needs attention"
 
         colors = [RED if i == 0 else LTBLUE for i in range(len(rows))]
 
