@@ -891,36 +891,55 @@ elif page == "Page 3 — Quarterly Analysis":
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    # ── 1. The funnel over time ───────────────────────────────────────────────
-    st.markdown("<div class='sec-head'>📊 1. Inquiries vs. Volunteers Sworn In — every quarter</div>", unsafe_allow_html=True)
+    # ── 1. The two flows over time ────────────────────────────────────────────
+    st.markdown("<div class='sec-head'>📊 1. Inquiries vs. Volunteers Sworn In — by quarter</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
+
+    all_q_labels = list(qdf['label'])
+    st.markdown("<div style='font-size:12px;font-weight:700;color:#002855;margin-bottom:4px'>Choose quarters to show:</div>", unsafe_allow_html=True)
+    ca, cb = st.columns([1, 4])
+    with ca:
+        q_all = st.checkbox("All", value=True, key="p3_qall")
+    with cb:
+        if q_all:
+            pick_q = all_q_labels
+            st.multiselect("", all_q_labels, default=all_q_labels, key="p3_qsel",
+                           disabled=True, label_visibility="collapsed")
+        else:
+            pick_q = st.multiselect("", all_q_labels, default=all_q_labels[-8:],
+                                    key="p3_qsel2", label_visibility="collapsed")
+            if not pick_q:
+                pick_q = all_q_labels
+
     st.markdown("""<div class='note-box'>
-        💡 <strong>What this tells you:</strong> The pale bar is everyone who inquired that quarter; the solid navy bar
-        sitting inside it is volunteers sworn in. The exposed pale portion is the gap — interest that has not (yet)
-        become a sworn volunteer. Watch whether the navy is filling more of the pale bar over time.
-        Bars are drawn for every quarter in your data, so pre-growth-plan quarters are visible for contrast.
+        💡 <strong>How to read this:</strong> Two bars per quarter, side by side.
+        <strong>Pale bar</strong> = people who submitted an inquiry that quarter.
+        <strong>Navy bar</strong> = volunteers sworn in that quarter.
+        They are <em>separate counts, not a funnel</em> — someone sworn in this quarter usually inquired
+        months earlier, and many volunteers are recruited directly by affiliates and never submit an inquiry.
+        So read each bar's own trend over time, and whether the two rise and fall together.
     </div>""", unsafe_allow_html=True)
 
-    show = qdf[(qdf['inq'] > 0) | (qdf['sworn'].notna())].copy()
+    show = qdf[qdf['label'].isin(pick_q)].copy()
     xlab = [f"{r.label}<br>{r.period}" for r in show.itertuples()]
 
     fig_q = go.Figure()
     fig_q.add_trace(go.Bar(
         name='Inquiries', x=xlab, y=show['inq'],
-        marker_color="#C7D2E0", marker_line_width=0, width=0.62,
+        marker_color="#9FB4CC", marker_line_width=0,
         text=show['inq'], textposition='outside', cliponaxis=False,
-        textfont=dict(size=10, color="#5A6B80"),
+        textfont=dict(size=10, color="#4A5C73"),
         hovertemplate="<b>%{x}</b><br>Inquiries: %{y}<extra></extra>"))
     fig_q.add_trace(go.Bar(
-        name='Sworn In', x=xlab, y=show['sworn'].fillna(0),
-        marker_color=DKBLUE, marker_line_width=0, width=0.30,
+        name='Sworn In', x=xlab, y=show['sworn'],
+        marker_color=DKBLUE, marker_line_width=0,
         text=[("" if pd.isna(v) else int(v)) for v in show['sworn']],
-        textposition='inside', insidetextanchor='middle',
-        textfont=dict(size=10, color=WHITE),
+        textposition='outside', cliponaxis=False,
+        textfont=dict(size=10, color=DKBLUE),
         hovertemplate="<b>%{x}</b><br>Sworn In: %{y}<extra></extra>"))
     style_fig(fig_q, 420)
     fig_q.update_layout(
-        barmode='overlay', bargap=0.28,
+        barmode='group', bargap=0.25, bargroupgap=0.08,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     font=dict(size=12), bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(type='category', gridcolor="#E8ECF0", linecolor=MIDGRAY,
