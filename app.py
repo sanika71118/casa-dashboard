@@ -796,12 +796,12 @@ elif page == "Page 3 — Quarterly Analysis":
 
     import re
 
-    # ── Build one quarterly fact table both charts read from ──────────────────
+    # ── Build one quarterly fact table every chart reads from ─────────────────
     def q_months(fy, q):
         y, m = {1: (fy - 1, 7), 2: (fy - 1, 10), 3: (fy, 1), 4: (fy, 4)}[q]
         return [f"{y}-{m + k:02d}" for k in range(3)]
 
-    def q_shift(fy, q, back):          # move back N quarters
+    def q_shift(fy, q, back):
         n = fy * 4 + (q - 1) - back
         return n // 4, n % 4 + 1
 
@@ -827,7 +827,7 @@ elif page == "Page 3 — Quarterly Analysis":
         missing = [m for m in months if m not in avail_months]
         i = sworn_idx.get((fy, q))
         sworn = (sum(v[i] for v in VOLUNTEER_DATA.values() if i < len(v))
-                 if i is not None else None)
+                 if i is not None else float('nan'))
         rows.append({
             'fy': fy, 'q': q, 'label': lbl,
             'period': f"{pd.Period(months[0],'M').strftime('%b')}–{pd.Period(months[-1],'M').strftime('%b %y')}",
@@ -839,55 +839,62 @@ elif page == "Page 3 — Quarterly Analysis":
     qdf = pd.DataFrame(rows)
     qlook = {(r.fy, r.q): r for r in qdf.itertuples()}
 
-    # ── KPIs — year-over-year, not quarter-over-quarter ───────────────────────
-    usable = qdf[(qdf['sworn'].notna()) & (qdf['complete'])]
-    if usable.empty:
-        st.warning("Not enough complete quarters to compute trends yet.")
-        st.stop()
-    last = usable.iloc[-1]
-    py = qlook.get((int(last['fy']) - 1, int(last['q'])))
-
+    # ── Helpers — everything from qdf may be NaN, never None ──────────────────
     def pct(now, then):
-        if then is None or then == 0:
+        if then is None or now is None or pd.isna(then) or pd.isna(now) or then == 0:
             return None
         return round((now - then) / then * 100)
 
-    inq_yoy   = pct(last['inq'],   py.inq   if py else None)
-    sworn_yoy = pct(last['sworn'], py.sworn if py and py.sworn is not None else None)
-
-    def arrow(v):
-        if v is None:
-            return "no prior year"
-        return f"{'▲' if v > 0 else '▼' if v < 0 else '■'} {abs(v)}% vs {last['label'][:4].replace('FY','FY')[:2]}{int(last['fy'])-1-2000} {last['label'][-2:]}"
-
-    # trailing 4 quarters vs the 4 before that
-    t4  = usable.tail(4)
-    p4  = usable.iloc[-8:-4] if len(usable) >= 8 else pd.DataFrame()
-    t4_sworn = int(t4['sworn'].sum())
-    p4_sworn = int(p4['sworn'].sum()) if not p4.empty else None
-    t4_yoy   = pct(t4_sworn, p4_sworn)
-
-    # yield: sworn this quarter vs inquiries 2 quarters earlier
     LAG = 2
     def yield_for(fy, q):
         src = qlook.get(q_shift(fy, q, LAG))
         tgt = qlook.get((fy, q))
-        if not src or not tgt or tgt.sworn is None or not src.inq or not src.complete:
+        if src is None or tgt is None:
             return None
-        return round(tgt.sworn / src.inq * 100)
+        if pd.isna(tgt.sworn) or not src.complete:
+            return None
+        if not src.inq or pd.isna(src.inq):
+            return None
+        return round(float(tgt.sworn) / float(src.inq) * 100)
 
-    y_now = yield_for(int(last['fy']), int(last['q']))
+    # ── KPIs — year over year, not quarter over quarter ───────────────────────
+    usable = qdf[qdf['sworn'].notna() & qdf['complete']]
+    if usable.empty:
+        st.warning("Not enough complete quarters to compute trends yet.")
+        st.stop()
+
+    last = usable.iloc[-1]
+    last_fy, last_q = int(last['fy']), int(last['q'])
+    prior = qlook.get((last_fy - 1, last_q))
+    prior_lbl = f"FY{str(last_fy - 1)[2:]} Q{last_q}"
+
+    inq_yoy   = pct(last['inq'],   prior.inq   if prior is not None else None)
+    sworn_yoy = pct(last['sworn'], prior.sworn if prior is not None else None)
+
+    def arrow(v):
+        if v is None:
+            return f"no {prior_lbl} data to compare"
+        mark = "▲" if v > 0 else "▼" if v < 0 else "■"
+        return f"{mark} {abs(v)}% vs {prior_lbl}"
+
+    t4 = usable.tail(4)
+    p4 = usable.iloc[-8:-4] if len(usable) >= 8 else pd.DataFrame()
+    t4_sworn = int(t4['sworn'].sum())
+    p4_sworn = int(p4['sworn'].sum()) if not p4.empty else None
+    t4_yoy   = pct(t4_sworn, p4_sworn)
+    y_now    = yield_for(last_fy, last_q)
 
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Inquiries — {last["label"]}</div><div class="kpi-value">{last["inq"]:,}</div><div class="kpi-sub">{arrow(inq_yoy)}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Inquiries — {last["label"]}</div><div class="kpi-value">{int(last["inq"]):,}</div><div class="kpi-sub">{arrow(inq_yoy)}</div></div>', unsafe_allow_html=True)
     with k2:
         st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Sworn In — {last["label"]}</div><div class="kpi-value">{int(last["sworn"]):,}</div><div class="kpi-sub">{arrow(sworn_yoy)}</div></div>', unsafe_allow_html=True)
     with k3:
-        sub = f"vs {p4_sworn:,} prior 4 qtrs" if p4_sworn else "not enough history"
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Sworn In — Last 4 Quarters</div><div class="kpi-value">{t4_sworn:,}</div><div class="kpi-sub">{sub}{"" if t4_yoy is None else f" · {t4_yoy:+d}%"}</div></div>', unsafe_allow_html=True)
+        sub = (f"vs {p4_sworn:,} prior 4 qtrs · {t4_yoy:+d}%"
+               if p4_sworn is not None and t4_yoy is not None else "not enough history to compare")
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Sworn In — Last 4 Quarters</div><div class="kpi-value">{t4_sworn:,}</div><div class="kpi-sub">{sub}</div></div>', unsafe_allow_html=True)
     with k4:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Yield per 100 Inquiries</div><div class="kpi-value">{y_now if y_now is not None else "—"}</div><div class="kpi-sub">sworn in {last["label"]} vs inquiries 2 qtrs earlier</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Yield per 100 Inquiries</div><div class="kpi-value">{y_now if y_now is not None else "—"}</div><div class="kpi-sub">sworn in {last["label"]} vs inquiries {LAG} qtrs earlier</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -916,8 +923,8 @@ elif page == "Page 3 — Quarterly Analysis":
         <strong>Pale bar</strong> = people who submitted an inquiry that quarter.
         <strong>Navy bar</strong> = volunteers sworn in that quarter.
         They are <em>separate counts, not a funnel</em> — someone sworn in this quarter usually inquired
-        months earlier, and many volunteers are recruited directly by affiliates and never submit an inquiry.
-        So read each bar's own trend over time, and whether the two rise and fall together.
+        months earlier, and many volunteers are recruited by affiliates directly and never submit an inquiry.
+        Read each bar's own trend across quarters, and whether the two rise and fall together.
     </div>""", unsafe_allow_html=True)
 
     show = qdf[qdf['label'].isin(pick_q)].copy()
@@ -953,8 +960,8 @@ elif page == "Page 3 — Quarterly Analysis":
     st.markdown("""<div class='note-box'>
         💡 <strong>Why this chart matters most:</strong> Volunteer recruitment is seasonal, so comparing Q2 to Q1
         mostly measures the calendar. Comparing <strong>Q1 to last year's Q1</strong> is a fair comparison.
-        Each cluster is one fiscal quarter; darker bars are more recent years. Rising bars left-to-right within
-        a cluster means real growth, not a seasonal bump.
+        Each cluster is one fiscal quarter; darker bars are more recent years. Bars rising left-to-right
+        within a cluster means real growth, not a seasonal bump.
     </div>""", unsafe_allow_html=True)
 
     metric = st.radio("Metric", ["Sworn In", "Inquiries"], horizontal=True,
@@ -962,18 +969,20 @@ elif page == "Page 3 — Quarterly Analysis":
     col = 'sworn' if metric == "Sworn In" else 'inq'
     yoy = qdf[qdf[col].notna()]
     fys = sorted(yoy['fy'].unique())
-    shades = ["#BBC9DB", "#7B95B5", "#3E6591", DKBLUE][-len(fys):] if len(fys) <= 4 \
-             else ["#D3DCE7", "#BBC9DB", "#93AAC7", "#6C8CB0", "#3E6591", DKBLUE][-len(fys):]
+    ramp = ["#DCE3EC", "#C0CDDD", "#9FB4CC", "#7B95B5", "#5A7BA0", "#3E6591", "#204A76", DKBLUE]
+    shades = ramp[-len(fys):] if len(fys) <= len(ramp) else ramp * (len(fys) // len(ramp) + 1)
 
     fig_yoy = go.Figure()
     for shade, fy in zip(shades, fys):
         sub = yoy[yoy['fy'] == fy].set_index('q')[col].reindex([1, 2, 3, 4])
         fig_yoy.add_trace(go.Bar(
-            name=f"FY{fy}", x=["Q1<br>Jul–Sep", "Q2<br>Oct–Dec", "Q3<br>Jan–Mar", "Q4<br>Apr–Jun"],
+            name=f"FY{fy}",
+            x=["Q1<br>Jul–Sep", "Q2<br>Oct–Dec", "Q3<br>Jan–Mar", "Q4<br>Apr–Jun"],
             y=sub.values, marker_color=shade, marker_line_width=0,
             text=[("" if pd.isna(v) else int(v)) for v in sub.values],
-            textposition='outside', cliponaxis=False, textfont=dict(size=10, color=DKBLUE),
-            hovertemplate="<b>FY" + str(fy) + " %{x}</b><br>" + metric + ": %{y}<extra></extra>"))
+            textposition='outside', cliponaxis=False,
+            textfont=dict(size=10, color=DKBLUE),
+            hovertemplate=f"<b>FY{fy} %{{x}}</b><br>{metric}: %{{y}}<extra></extra>"))
     style_fig(fig_yoy, 380)
     fig_yoy.update_layout(
         barmode='group', bargap=0.25, bargroupgap=0.06,
@@ -1014,7 +1023,7 @@ elif page == "Page 3 — Quarterly Analysis":
                             showlegend=False)
         st.plotly_chart(fig_y, use_container_width=True)
     else:
-        st.info(f"Need at least {LAG + 2} consecutive quarters of both datasets to plot a yield trend.")
+        st.info(f"Need at least {LAG + 2} consecutive quarters with both datasets to plot a yield trend.")
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ── 4. The numbers ────────────────────────────────────────────────────────
@@ -1023,16 +1032,17 @@ elif page == "Page 3 — Quarterly Analysis":
     tbl = []
     for r in qdf.itertuples():
         py = qlook.get((r.fy - 1, r.q))
-        iy = pct(r.inq, py.inq if py else None)
-        sy = pct(r.sworn, py.sworn if py and py.sworn is not None and r.sworn is not None else None)
+        iy = pct(r.inq,   py.inq   if py is not None else None)
+        sy = pct(r.sworn, py.sworn if py is not None else None)
+        yf = yield_for(r.fy, r.q)
         tbl.append({
-            'Quarter':   r.label,
-            'Period':    r.period,
-            'Inquiries': f"{r.inq}" + ("" if r.complete else f" ({r.missing} missing)"),
-            'Inq. YoY':  "—" if iy is None else f"{iy:+d}%",
-            'Sworn In':  "—" if r.sworn is None else f"{int(r.sworn)}",
-            'Sworn YoY': "—" if sy is None else f"{sy:+d}%",
-            'Yield /100': "—" if yield_for(r.fy, r.q) is None else f"{yield_for(r.fy, r.q)}",
+            'Quarter':    r.label,
+            'Period':     r.period,
+            'Inquiries':  f"{r.inq}" + ("" if r.complete else f" ({r.missing} missing)"),
+            'Inq. YoY':   "—" if iy is None else f"{iy:+d}%",
+            'Sworn In':   "—" if pd.isna(r.sworn) else f"{int(r.sworn)}",
+            'Sworn YoY':  "—" if sy is None else f"{sy:+d}%",
+            'Yield /100': "—" if yf is None else f"{yf}",
         })
     st.dataframe(pd.DataFrame(tbl), use_container_width=True, hide_index=True, height=420)
     st.markdown("</div>", unsafe_allow_html=True)
