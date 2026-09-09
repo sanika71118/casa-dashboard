@@ -695,20 +695,37 @@ elif page == "Page 2 — Volunteer Map":
         else:
             st.info("Map unavailable — could not load county boundaries. The ranked list on the right still shows all data.")
     with c2b:
-        ranked = sorted([(aff, get_vol(aff)) for aff in VOLUNTEER_DATA], key=lambda x: -x[1])
-        ranked = [(a, v) for a, v in ranked if v > 0]
-        rdf = pd.DataFrame(ranked, columns=['Affiliate', 'Sworn In'])
+        view = st.radio("Show", ["Top 10", "Bottom 10"], horizontal=True,
+                        key="p2_rank_view", label_visibility="collapsed")
+
+        allv = sorted([(aff, get_vol(aff)) for aff in VOLUNTEER_DATA], key=lambda x: -x[1])
+
+        if view == "Top 10":
+            rows = allv[:10]
+            colors = [RED if i == 0 else LTBLUE for i in range(len(rows))]
+            title = "Top 10 affiliates — most sworn in"
+        else:
+            rows = sorted(allv, key=lambda x: x[1])[:10][::-1]
+            colors = [GOLD] * len(rows)
+            title = "Bottom 10 affiliates — fewest sworn in"
+
+        rdf = pd.DataFrame(rows, columns=['Affiliate', 'Sworn In'])
         fig_rank = go.Figure(go.Bar(
             x=rdf['Sworn In'], y=rdf['Affiliate'], orientation='h',
-            marker_color=[RED if i == 0 else LTBLUE for i in range(len(rdf))],
+            marker_color=colors,
             text=rdf['Sworn In'], textposition='outside', cliponaxis=False,
+            textfont=dict(size=11, color=DKBLUE),
             hovertemplate="<b>%{y}</b><br>Sworn in: %{x}<extra></extra>"))
-        style_fig(fig_rank, max(430, len(rdf) * 22))
+        style_fig(fig_rank, 390)
         fig_rank.update_layout(
+            title=dict(text=title, font=dict(color=DKBLUE, size=12)),
+            bargap=0.3,
             yaxis=dict(autorange='reversed', gridcolor="rgba(0,0,0,0)",
-                       tickmode='linear', tickfont=dict(size=10)),
-            showlegend=False, margin=dict(l=10, r=50, t=20, b=10))
+                       tickmode='linear', tickfont=dict(size=11)),
+            showlegend=False, margin=dict(l=10, r=55, t=35, b=10))
         st.plotly_chart(fig_rank, use_container_width=True)
+
+    
 
     # Region breakdown table
     st.markdown("<div class='sec-head'>📊 Volunteers by Region — Detailed Breakdown</div>", unsafe_allow_html=True)
