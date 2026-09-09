@@ -318,36 +318,34 @@ with st.sidebar:
     st.markdown("<div style='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.5)'>Filter by Month</div>", unsafe_allow_html=True)
     month_options = sorted(df['YearMonth'].unique())
     month_labels  = {m: pd.Period(m,'M').strftime('%B %Y') for m in month_options}
-
-    # FY2026 = Jul 2025 → Jun 2026
-    fy2026_months = [m for m in month_options if
-                     (m >= '2025-07' and m <= '2025-12') or
-                     (m >= '2026-01' and m <= '2026-06')]
+    # Current fiscal year, derived from the data — no hardcoded dates
+    current_fy  = int(df['FYYear'].max())
+    fy_months   = sorted(df[df['FYYear'] == current_fy]['YearMonth'].unique())
 
     # FY filter buttons
     st.markdown("<div style='font-size:10px;color:rgba(255,255,255,.6);margin-bottom:4px'>Quick select:</div>", unsafe_allow_html=True)
     fy_col1, fy_col2 = st.columns(2)
     with fy_col1:
-        if st.button("FY2026", use_container_width=True, key="fy26btn"):
-            st.session_state['month_selection'] = 'fy2026'
+        if st.button(f"FY{current_fy}", use_container_width=True, key="fy26btn"):
+            st.session_state['month_selection'] = 'current_fy'
     with fy_col2:
         if st.button("All FYs", use_container_width=True, key="allbtn"):
             st.session_state['month_selection'] = 'all'
 
-    # Default to FY2026 on first load
+    # Default to the current FY on first load
     if 'month_selection' not in st.session_state:
-        st.session_state['month_selection'] = 'fy2026'
+        st.session_state['month_selection'] = 'current_fy'
 
     select_all = st.checkbox("All Months", value=(st.session_state['month_selection'] == 'all'))
-
     if select_all:
         st.session_state['month_selection'] = 'all'
         selected_months = month_options
     else:
-        default_months = fy2026_months if st.session_state['month_selection'] == 'fy2026' else month_options[-3:]
+        default_months = fy_months if st.session_state['month_selection'] == 'current_fy' else month_options[-3:]
         selected_months = st.multiselect("Choose months:", options=month_options,
                                           format_func=lambda x: month_labels[x],
                                           default=[m for m in default_months if m in month_options])
+
     if not selected_months:
         st.warning("Select at least one month.")
         st.stop()
@@ -631,44 +629,38 @@ if page == "Page 1 — Inquiries":
 # PAGE 2 — VOLUNTEER MAP
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "Page 2 — Volunteer Map":
-
     st.markdown(f"""<div class="casa-header">
         <h1>⚖️ CASA Georgia — New Volunteers by Affiliate</h1>
-        <p>Volunteers sworn in by affiliate region &nbsp;|&nbsp; FY2026 Q1–Q3</p>
+        <p>Volunteers sworn in by affiliate region</p>
     </div>""", unsafe_allow_html=True)
 
-    # KPIs
-    total_vol = sum(sum(v) for v in VOLUNTEER_DATA.values())
-    top_aff_v = max(VOLUNTEER_DATA, key=lambda k: sum(VOLUNTEER_DATA[k]))
-    top_aff_vn = sum(VOLUNTEER_DATA[top_aff_v])
-    active_affs = sum(1 for v in VOLUNTEER_DATA.values() if sum(v) > 0)
-
-    k1,k2,k3,k4 = st.columns(4)
-    with k1:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Sworn In</div><div class="kpi-value">{total_vol:,}</div><div class="kpi-sub">FY2026 Q1–Q3</div></div>', unsafe_allow_html=True)
-    with k2:
-        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Active Affiliates</div><div class="kpi-value">{active_affs}</div><div class="kpi-sub">With at least 1 volunteer</div></div>', unsafe_allow_html=True)
-    with k3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Top Affiliate</div><div class="kpi-value" style="font-size:18px;padding-top:5px">{top_aff_v}</div><div class="kpi-sub">{top_aff_vn} sworn in</div></div>', unsafe_allow_html=True)
-    with k4:
-        total_inq = len(filtered)
-        conv = round(total_vol / total_inq * 100) if total_inq > 0 else 0
-        st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Overall Conversion</div><div class="kpi-value">{conv}%</div><div class="kpi-sub">Sworn in vs inquiries</div></div>', unsafe_allow_html=True)
-
+    # Reserve the KPI row here — it is FILLED further down, once the quarter
+    # filter exists, but it DRAWS at this position on the page.
+    kpi_slot = st.container()
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+    # ── Quarter filter ────────────────────────────────────────────────────────
     st.markdown("<div style='font-size:12px;font-weight:700;color:#002855;margin-bottom:4px'>Filter by Quarter (select one or more):</div>", unsafe_allow_html=True)
-    col_all, col_qtrs = st.columns([1,4])
+
+    def _qkey(lbl):
+        fy, q = lbl.split()
+        return (int(fy[2:]), int(q[1:]))
+    QTR_ORDER = sorted(VOL_QTR_LABELS, key=_qkey)
+
+    col_all, col_qtrs = st.columns([1, 4])
     with col_all:
         select_all_qtrs = st.checkbox("All", value=True, key="p2_all")
     with col_qtrs:
         if select_all_qtrs:
-            selected_qtrs = VOL_QTR_LABELS
-            st.multiselect("", VOL_QTR_LABELS, default=VOL_QTR_LABELS, key="p2_multi", disabled=True, label_visibility="collapsed")
+            selected_qtrs = QTR_ORDER
+            st.multiselect("", QTR_ORDER, default=QTR_ORDER, key="p2_multi",
+                           disabled=True, label_visibility="collapsed")
         else:
-            selected_qtrs = st.multiselect("", VOL_QTR_LABELS, default=[VOL_QTR_LABELS[-1]] if VOL_QTR_LABELS else [], key="p2_multi2", label_visibility="collapsed")
+            selected_qtrs = st.multiselect(
+                "", QTR_ORDER, default=[QTR_ORDER[-1]] if QTR_ORDER else [],
+                key="p2_multi2", label_visibility="collapsed")
             if not selected_qtrs:
-                selected_qtrs = VOL_QTR_LABELS
+                selected_qtrs = QTR_ORDER
 
     selected_idxs = [VOL_QTR_LABELS.index(q) for q in selected_qtrs if q in VOL_QTR_LABELS]
 
@@ -678,25 +670,48 @@ elif page == "Page 2 — Volunteer Map":
             return 0
         return sum(v[i] for i in selected_idxs if i < len(v))
 
+    # ── Fill the reserved KPI slot ────────────────────────────────────────────
+    with kpi_slot:
+        vol_now     = {aff: get_vol(aff) for aff in VOLUNTEER_DATA}
+        total_vol   = sum(vol_now.values())
+        top_aff_v   = max(vol_now, key=vol_now.get) if vol_now else "—"
+        top_aff_vn  = vol_now.get(top_aff_v, 0)
+        active_affs = sum(1 for v in vol_now.values() if v > 0)
+
+        inq_same_period = len(df[df['FYLabel'].isin(selected_qtrs)])
+        ratio = round(total_vol / inq_same_period * 100) if inq_same_period else 0
+        qtr_note = ("All quarters" if len(selected_qtrs) == len(QTR_ORDER)
+                    else f"{len(selected_qtrs)} quarter(s) selected")
+
+        k1, k2, k3, k4 = st.columns(4)
+        with k1:
+            st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Sworn In</div><div class="kpi-value">{total_vol:,}</div><div class="kpi-sub">{qtr_note}</div></div>', unsafe_allow_html=True)
+        with k2:
+            st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Active Affiliates</div><div class="kpi-value">{active_affs}</div><div class="kpi-sub">With at least 1 volunteer</div></div>', unsafe_allow_html=True)
+        with k3:
+            st.markdown(f'<div class="kpi-card"><div class="kpi-label">Top Affiliate</div><div class="kpi-value" style="font-size:18px;padding-top:5px">{top_aff_v}</div><div class="kpi-sub">{top_aff_vn} sworn in</div></div>', unsafe_allow_html=True)
+        with k4:
+            st.markdown(f'<div class="kpi-card blue"><div class="kpi-label">Sworn In per 100 Inquiries</div><div class="kpi-value">{ratio}</div><div class="kpi-sub">{total_vol:,} sworn in · {inq_same_period:,} inquiries, same quarters</div></div>', unsafe_allow_html=True)
+
+    # ── Map + ranking ─────────────────────────────────────────────────────────
     st.markdown("<div class='sec-head'>🗺️ Volunteers Sworn In — by County (Filled Map)</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
-    st.markdown(f"""<div class='note-box'>
+    st.markdown("""<div class='note-box'>
         💡 <strong>What this tells you:</strong> The map shows Georgia counties shaded by how many new volunteers
         were sworn in — <strong>darker red = more volunteers</strong>, light pink = fewer, white = none yet.
         Counties share the count of their affiliate, so all counties in one affiliate region will have the same shade.
         Use the quarter filter above to see which regions were most active in a specific time period.
-        This helps leadership quickly spot which parts of Georgia are growing their volunteer base.
     </div>""", unsafe_allow_html=True)
 
-    
     county_rows = []
     for county, fips in GA_COUNTY_FIPS.items():
         aff = COUNTY_TO_AFF.get(county)
         v = get_vol(aff) if aff else 0
-        county_rows.append({'County':county, 'FIPS':fips, 'Affiliate':aff or 'No County Selected', 'Count':v})
+        county_rows.append({'County': county, 'FIPS': fips,
+                            'Affiliate': aff or 'No County Selected', 'Count': v})
     vol_county_df = pd.DataFrame(county_rows)
 
-    c2a, c2b = st.columns([3,2])
+    c2a, c2b = st.columns([3, 2])
     with c2a:
         max_v = max(vol_county_df['Count'].max(), 1)
         ga_geojson = load_ga_geojson()
@@ -705,12 +720,13 @@ elif page == "Page 2 — Volunteer Map":
                 vol_county_df, geojson=ga_geojson,
                 locations='FIPS', color='Count',
                 hover_name='County',
-                hover_data={'FIPS':False,'Affiliate':True,'Count':True},
-                color_continuous_scale=[[0,LGRAY],[0.15,'#FFD0D0'],[0.4,'#FF8888'],[0.7,RED],[1.0,'#7A0818']],
+                hover_data={'FIPS': False, 'Affiliate': True, 'Count': True},
+                color_continuous_scale=[[0, LGRAY], [0.15, '#FFD0D0'], [0.4, '#FF8888'],
+                                        [0.7, RED], [1.0, '#7A0818']],
                 range_color=(0, max_v),
             )
             fig_vmap.update_geos(fitbounds="locations", visible=False, scope="usa")
-            fig_vmap.update_layout(height=430, margin=dict(l=0,r=0,t=0,b=0),
+            fig_vmap.update_layout(height=430, margin=dict(l=0, r=0, t=0, b=0),
                 paper_bgcolor="rgba(0,0,0,0)",
                 coloraxis_colorbar=dict(title="Sworn In", thickness=12, len=0.6))
             fig_vmap.update_traces(marker_line_color='white', marker_line_width=0.6,
@@ -718,6 +734,7 @@ elif page == "Page 2 — Volunteer Map":
             st.plotly_chart(fig_vmap, use_container_width=True)
         else:
             st.info("Map unavailable — could not load county boundaries. The ranked list on the right still shows all data.")
+
     with c2b:
         view = st.radio("Show", ["Top 10", "Bottom 10"], horizontal=True,
                         key="p2_rank_view", label_visibility="collapsed")
@@ -732,8 +749,6 @@ elif page == "Page 2 — Volunteer Map":
             rows = sorted(allv, key=lambda x: x[1])[:10][::-1]
             colors = [RED] * len(rows)
             title = "Bottom 10 affiliates — fewest sworn in · needs attention"
-
-        
 
         rdf = pd.DataFrame(rows, columns=['Affiliate', 'Sworn In'])
         fig_rank = go.Figure(go.Bar(
@@ -751,24 +766,24 @@ elif page == "Page 2 — Volunteer Map":
             showlegend=False, margin=dict(l=10, r=55, t=35, b=10))
         st.plotly_chart(fig_rank, use_container_width=True)
 
-    
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # Region breakdown table
+    # ── Region breakdown table ────────────────────────────────────────────────
     st.markdown("<div class='sec-head'>📊 Volunteers by Region — Detailed Breakdown</div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-body'>", unsafe_allow_html=True)
     rows = []
     for region, affs in REGIONS:
         for aff in affs:
-            v = VOLUNTEER_DATA.get(aff, [0]*len(VOL_QTR_LABELS))
-            row = {'Region':region,'Affiliate':aff}
+            v = VOLUNTEER_DATA.get(aff, [0] * len(VOL_QTR_LABELS))
+            row = {'Region': region, 'Affiliate': aff}
             for i, lbl in enumerate(VOL_QTR_LABELS):
                 row[lbl] = v[i] if i < len(v) else 0
             row['Total'] = sum(v)
             rows.append(row)
     reg_df = pd.DataFrame(rows)
-    st.dataframe(reg_df.style.bar(subset=['Total'],color=RED+"88"), use_container_width=True, height=500)
+    st.dataframe(reg_df.style.bar(subset=['Total'], color=RED + "88"),
+                 use_container_width=True, height=500)
     st.markdown("</div>", unsafe_allow_html=True)
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 3 — QUARTERLY ANALYSIS
