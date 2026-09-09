@@ -585,11 +585,18 @@ if page == "Page 1 — Inquiries":
             showlegend=False, margin=dict(l=10,r=30,t=40,b=10))
         st.plotly_chart(fig_aff, use_container_width=True)
 
-    with st.expander("🔍 Full County Breakdown Table"):
-        ct = filtered.groupby(['County','Affiliate']).size().reset_index(name='Inquiries').sort_values('Inquiries',ascending=False).reset_index(drop=True)
+        with st.expander("🔍 Full County Breakdown Table"):
+        ct = (filtered[filtered['Affiliate'] != 'No County Selected']
+              .groupby(['Affiliate', 'County']).size().reset_index(name='Inquiries'))
+        # order: biggest affiliate first, then biggest county within it
+        ct['_tot'] = ct.groupby('Affiliate')['Inquiries'].transform('sum')
+        ct = (ct.sort_values(['_tot', 'Affiliate', 'Inquiries', 'County'],
+                             ascending=[False, True, False, True])
+                .drop(columns='_tot')[['Affiliate', 'County', 'Inquiries']]
+                .reset_index(drop=True))
         ct.index += 1
-        st.dataframe(ct.style.bar(subset=['Inquiries'],color=RED+"88"), use_container_width=True, height=300)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.dataframe(ct.style.bar(subset=['Inquiries'], color=RED + "88"),
+                     use_container_width=True, height=600)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
